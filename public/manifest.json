@@ -1,0 +1,36 @@
+{
+  "name": "Mkelo — Gestion financière",
+  "short_name": "Mkelo",
+  "description": "Suivi de tes revenus, dépenses et solde au quotidien.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2946c7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-portefeuille-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-portefeuille-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-portefeuille-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-portefeuille-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
