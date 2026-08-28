@@ -87,26 +87,8 @@ const daysAgo = (n) => {
   return d;
 };
 
-const SEED_TRANSACTIONS = [
-  { id: 1, type: "revenu", category: "Salaire", description: "Salaire", amount: 500, date: daysAgo(0), paymentMethod: "banque" },
-  { id: 2, type: "depense", category: "Nourriture", description: "Déjeuner", amount: 8, date: daysAgo(0), paymentMethod: "airtel" },
-  { id: 3, type: "depense", category: "Transport", description: "Taxi-moto", amount: 4, date: daysAgo(0), paymentMethod: "especes" },
-  { id: 4, type: "depense", category: "Shopping", description: "Vêtements", amount: 32, date: daysAgo(1), paymentMethod: "orange" },
-  { id: 5, type: "depense", category: "Internet", description: "Forfait data", amount: 12, date: daysAgo(2), paymentMethod: "vodacom" },
-  { id: 6, type: "depense", category: "Nourriture", description: "Marché", amount: 21, date: daysAgo(3), paymentMethod: "especes" },
-  { id: 7, type: "depense", category: "Transport", description: "Bus", amount: 3, date: daysAgo(4), paymentMethod: "especes" },
-  { id: 8, type: "revenu", category: "Autre", description: "Vente d'un objet", amount: 45, date: daysAgo(5), paymentMethod: "airtel" },
-  { id: 9, type: "depense", category: "Logement", description: "Facture d'eau", amount: 18, date: daysAgo(6), paymentMethod: "orange" },
-  { id: 10, type: "depense", category: "Santé", description: "Pharmacie", amount: 15, date: daysAgo(8), paymentMethod: "especes" },
-  { id: 11, type: "depense", category: "Nourriture", description: "Restaurant", amount: 27, date: daysAgo(9), paymentMethod: "airtel" },
-  { id: 12, type: "depense", category: "Loisirs", description: "Cinéma", amount: 10, date: daysAgo(11), paymentMethod: "vodacom" },
-  { id: 13, type: "revenu", category: "Autre", description: "Freelance", amount: 120, date: daysAgo(14), paymentMethod: "banque" },
-  { id: 14, type: "depense", category: "Transport", description: "Carburant", amount: 25, date: daysAgo(16), paymentMethod: "orange" },
-  { id: 15, type: "depense", category: "Logement", description: "Loyer", amount: 150, date: daysAgo(18), paymentMethod: "banque" },
-  { id: 16, type: "depense", category: "Shopping", description: "Chaussures", amount: 22, date: daysAgo(21), paymentMethod: "airtel" },
-  { id: 17, type: "revenu", category: "Salaire", description: "Salaire (avance)", amount: 200, date: daysAgo(24), paymentMethod: "banque" },
-  { id: 18, type: "depense", category: "Nourriture", description: "Épicerie", amount: 34, date: daysAgo(27), paymentMethod: "vodacom" },
-];
+// Aucune transaction préchargée : chaque nouveau client commence à zéro.
+const SEED_TRANSACTIONS = [];
 
 /* ============================================================
    FONCTIONS UTILITAIRES
@@ -352,8 +334,8 @@ function App() {
       if (storedTransactions) {
         setTransactions(storedTransactions);
       } else {
-        setTransactions(SEED_TRANSACTIONS);
-        saveTransactions(SEED_TRANSACTIONS);
+        setTransactions([]);
+        saveTransactions([]);
       }
 
       if (storedPrefs) {
@@ -570,7 +552,7 @@ function App() {
   };
 
   const reinitialiserDonnees = () => {
-    setTransactions(SEED_TRANSACTIONS);
+    setTransactions([]);
     setShowResetConfirm(false);
     setToast("Données réinitialisées 🔄");
   };
