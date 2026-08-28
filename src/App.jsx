@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import {
   Home,
   TrendingUp,
+  TrendingDown,
   CreditCard,
   User,
   Bell,
@@ -14,6 +15,7 @@ import {
   Moon,
   Sun,
   Wallet,
+  CheckCheck,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -31,6 +33,8 @@ import {
 /* ============================================================
    DONNÉES DE RÉFÉRENCE
    ============================================================ */
+
+const LOGO_DATA_URI = "data:image/png;base64,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";
 
 const CATEGORY_ICONS = {
   Nourriture: "🍔",
@@ -59,9 +63,20 @@ const CATEGORY_COLORS = {
 const CATEGORIES = Object.keys(CATEGORY_ICONS);
 const EXCHANGE_RATE = 2850; // FC pour 1 USD (taux indicatif)
 
+const PAYMENT_METHODS = [
+  { key: "especes", label: "Espèces", color: "#64748b", emoji: "💵" },
+  { key: "airtel", label: "Airtel Money", color: "#E4032E", emoji: "📱" },
+  { key: "orange", label: "Orange Money", color: "#FF7900", emoji: "📱" },
+  { key: "vodacom", label: "Vodacom M-Pesa", color: "#E30613", emoji: "📱" },
+  { key: "banque", label: "Banque", color: "#2946c7", emoji: "🏦" },
+];
+
 const STORAGE_KEYS = {
   transactions: "mkelo:transactions",
   prefs: "mkelo:prefs",
+  profile: "mkelo:profile",
+  notifications: "mkelo:notifications",
+  alerts: "mkelo:alerts",
 };
 
 // Génère une date à J-n jours
@@ -73,24 +88,24 @@ const daysAgo = (n) => {
 };
 
 const SEED_TRANSACTIONS = [
-  { id: 1, type: "revenu", category: "Salaire", description: "Salaire", amount: 500, date: daysAgo(0) },
-  { id: 2, type: "depense", category: "Nourriture", description: "Déjeuner", amount: 8, date: daysAgo(0) },
-  { id: 3, type: "depense", category: "Transport", description: "Taxi-moto", amount: 4, date: daysAgo(0) },
-  { id: 4, type: "depense", category: "Shopping", description: "Vêtements", amount: 32, date: daysAgo(1) },
-  { id: 5, type: "depense", category: "Internet", description: "Forfait data", amount: 12, date: daysAgo(2) },
-  { id: 6, type: "depense", category: "Nourriture", description: "Marché", amount: 21, date: daysAgo(3) },
-  { id: 7, type: "depense", category: "Transport", description: "Bus", amount: 3, date: daysAgo(4) },
-  { id: 8, type: "revenu", category: "Autre", description: "Vente d'un objet", amount: 45, date: daysAgo(5) },
-  { id: 9, type: "depense", category: "Logement", description: "Facture d'eau", amount: 18, date: daysAgo(6) },
-  { id: 10, type: "depense", category: "Santé", description: "Pharmacie", amount: 15, date: daysAgo(8) },
-  { id: 11, type: "depense", category: "Nourriture", description: "Restaurant", amount: 27, date: daysAgo(9) },
-  { id: 12, type: "depense", category: "Loisirs", description: "Cinéma", amount: 10, date: daysAgo(11) },
-  { id: 13, type: "revenu", category: "Autre", description: "Freelance", amount: 120, date: daysAgo(14) },
-  { id: 14, type: "depense", category: "Transport", description: "Carburant", amount: 25, date: daysAgo(16) },
-  { id: 15, type: "depense", category: "Logement", description: "Loyer", amount: 150, date: daysAgo(18) },
-  { id: 16, type: "depense", category: "Shopping", description: "Chaussures", amount: 22, date: daysAgo(21) },
-  { id: 17, type: "revenu", category: "Salaire", description: "Salaire (avance)", amount: 200, date: daysAgo(24) },
-  { id: 18, type: "depense", category: "Nourriture", description: "Épicerie", amount: 34, date: daysAgo(27) },
+  { id: 1, type: "revenu", category: "Salaire", description: "Salaire", amount: 500, date: daysAgo(0), paymentMethod: "banque" },
+  { id: 2, type: "depense", category: "Nourriture", description: "Déjeuner", amount: 8, date: daysAgo(0), paymentMethod: "airtel" },
+  { id: 3, type: "depense", category: "Transport", description: "Taxi-moto", amount: 4, date: daysAgo(0), paymentMethod: "especes" },
+  { id: 4, type: "depense", category: "Shopping", description: "Vêtements", amount: 32, date: daysAgo(1), paymentMethod: "orange" },
+  { id: 5, type: "depense", category: "Internet", description: "Forfait data", amount: 12, date: daysAgo(2), paymentMethod: "vodacom" },
+  { id: 6, type: "depense", category: "Nourriture", description: "Marché", amount: 21, date: daysAgo(3), paymentMethod: "especes" },
+  { id: 7, type: "depense", category: "Transport", description: "Bus", amount: 3, date: daysAgo(4), paymentMethod: "especes" },
+  { id: 8, type: "revenu", category: "Autre", description: "Vente d'un objet", amount: 45, date: daysAgo(5), paymentMethod: "airtel" },
+  { id: 9, type: "depense", category: "Logement", description: "Facture d'eau", amount: 18, date: daysAgo(6), paymentMethod: "orange" },
+  { id: 10, type: "depense", category: "Santé", description: "Pharmacie", amount: 15, date: daysAgo(8), paymentMethod: "especes" },
+  { id: 11, type: "depense", category: "Nourriture", description: "Restaurant", amount: 27, date: daysAgo(9), paymentMethod: "airtel" },
+  { id: 12, type: "depense", category: "Loisirs", description: "Cinéma", amount: 10, date: daysAgo(11), paymentMethod: "vodacom" },
+  { id: 13, type: "revenu", category: "Autre", description: "Freelance", amount: 120, date: daysAgo(14), paymentMethod: "banque" },
+  { id: 14, type: "depense", category: "Transport", description: "Carburant", amount: 25, date: daysAgo(16), paymentMethod: "orange" },
+  { id: 15, type: "depense", category: "Logement", description: "Loyer", amount: 150, date: daysAgo(18), paymentMethod: "banque" },
+  { id: 16, type: "depense", category: "Shopping", description: "Chaussures", amount: 22, date: daysAgo(21), paymentMethod: "airtel" },
+  { id: 17, type: "revenu", category: "Salaire", description: "Salaire (avance)", amount: 200, date: daysAgo(24), paymentMethod: "banque" },
+  { id: 18, type: "depense", category: "Nourriture", description: "Épicerie", amount: 34, date: daysAgo(27), paymentMethod: "vodacom" },
 ];
 
 /* ============================================================
@@ -112,6 +127,10 @@ function formatAmount(amountUSD, currency) {
     return `${value.toLocaleString("fr-FR")} FC`;
   }
   return `$${amountUSD.toFixed(2)}`;
+}
+
+function getPaymentMethod(key) {
+  return PAYMENT_METHODS.find((p) => p.key === key) || PAYMENT_METHODS[0];
 }
 
 function buildChartData(transactions, period) {
@@ -212,6 +231,66 @@ async function savePrefs(prefs) {
   }
 }
 
+async function loadProfile() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.profile);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // pas encore de profil enregistré
+  }
+  return null;
+}
+
+async function saveProfile(profile) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.notifications);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map((n) => ({ ...n, date: new Date(n.date) }));
+    }
+  } catch (e) {
+    // pas encore de notifications enregistrées
+  }
+  return null;
+}
+
+async function saveNotifications(notifications) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadAlertSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.alerts);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // pas encore de seuils enregistrés
+  }
+  return null;
+}
+
+async function saveAlertSettings(alertSettings) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.alerts, JSON.stringify(alertSettings));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* ============================================================
    APP
    ============================================================ */
@@ -230,6 +309,21 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  const [profile, setProfile] = useState(null);
+  const [isOnboarded, setIsOnboarded] = useState(false);
+  const [onboardingName, setOnboardingName] = useState("");
+  const [onboardingError, setOnboardingError] = useState("");
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editProfileName, setEditProfileName] = useState("");
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [showChangeProfileConfirm, setShowChangeProfileConfirm] = useState(false);
+
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [alertSettings, setAlertSettings] = useState(null);
+  const [alertLowInput, setAlertLowInput] = useState("");
+  const [alertHighInput, setAlertHighInput] = useState("");
+
   const [transactions, setTransactions] = useState([]);
 
   const [form, setForm] = useState({
@@ -237,6 +331,7 @@ function App() {
     category: "Nourriture",
     description: "",
     amount: "",
+    paymentMethod: "especes",
   });
 
   // Chargement initial depuis le stockage persistant
@@ -244,7 +339,13 @@ function App() {
     let cancelled = false;
 
     (async () => {
-      const [storedTransactions, storedPrefs] = await Promise.all([loadTransactions(), loadPrefs()]);
+      const [storedTransactions, storedPrefs, storedProfile, storedNotifications, storedAlertSettings] = await Promise.all([
+        loadTransactions(),
+        loadPrefs(),
+        loadProfile(),
+        loadNotifications(),
+        loadAlertSettings(),
+      ]);
 
       if (cancelled) return;
 
@@ -259,6 +360,14 @@ function App() {
         if (storedPrefs.theme) setTheme(storedPrefs.theme);
         if (storedPrefs.currency) setCurrency(storedPrefs.currency);
       }
+
+      if (storedProfile && storedProfile.name) {
+        setProfile(storedProfile);
+        setIsOnboarded(true);
+      }
+
+      if (storedNotifications) setNotifications(storedNotifications);
+      if (storedAlertSettings) setAlertSettings(storedAlertSettings);
 
       setIsLoading(false);
     })();
@@ -280,6 +389,24 @@ function App() {
     savePrefs({ theme, currency });
   }, [theme, currency, isLoading]);
 
+  // Sauvegarde automatique du profil
+  useEffect(() => {
+    if (isLoading || !profile) return;
+    saveProfile(profile);
+  }, [profile, isLoading]);
+
+  // Sauvegarde automatique des notifications
+  useEffect(() => {
+    if (isLoading) return;
+    saveNotifications(notifications);
+  }, [notifications, isLoading]);
+
+  // Sauvegarde automatique des seuils d'alerte
+  useEffect(() => {
+    if (isLoading || !alertSettings) return;
+    saveAlertSettings(alertSettings);
+  }, [alertSettings, isLoading]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
@@ -295,6 +422,55 @@ function App() {
     [transactions]
   );
   const solde = totalRevenus - totalDepenses;
+
+  const ajouterNotification = ({ type, title, message }) => {
+    setNotifications((prev) => [
+      { id: Date.now() + Math.random(), type, title, message, date: new Date(), read: false },
+      ...prev,
+    ].slice(0, 50));
+  };
+
+  // Initialise des seuils par défaut la première fois (30% et 150% du solde de départ)
+  useEffect(() => {
+    if (isLoading || alertSettings !== null || transactions.length === 0) return;
+    setAlertSettings({
+      lowThreshold: Math.max(Math.round(solde * 0.3 * 100) / 100, 0),
+      highThreshold: Math.round(solde * 1.5 * 100) / 100,
+      lowTriggered: false,
+      highTriggered: false,
+    });
+  }, [isLoading, alertSettings, transactions.length, solde]);
+
+  // Détecte les franchissements de seuil bas / haut et génère une notification
+  useEffect(() => {
+    if (isLoading || !alertSettings) return;
+    const { lowThreshold, highThreshold, lowTriggered, highTriggered } = alertSettings;
+
+    if (lowThreshold !== null && solde <= lowThreshold && !lowTriggered) {
+      ajouterNotification({
+        type: "bas",
+        title: "Solde bas",
+        message: `Ton solde est descendu à ${formatAmount(solde, currency)}, en dessous de ton seuil d'alerte (${formatAmount(lowThreshold, currency)}).`,
+      });
+      setToast("⚠️ Solde bas — notification envoyée");
+      setAlertSettings((prev) => ({ ...prev, lowTriggered: true }));
+    } else if (lowThreshold !== null && lowTriggered && solde > lowThreshold * 1.1) {
+      setAlertSettings((prev) => ({ ...prev, lowTriggered: false }));
+    }
+
+    if (highThreshold !== null && solde >= highThreshold && !highTriggered) {
+      ajouterNotification({
+        type: "haut",
+        title: "Nouveau sommet 🎉",
+        message: `Ton solde a atteint ${formatAmount(solde, currency)}, au-dessus de ton seuil de plafond (${formatAmount(highThreshold, currency)}).`,
+      });
+      setToast("🎉 Nouveau sommet atteint");
+      setAlertSettings((prev) => ({ ...prev, highTriggered: true }));
+    } else if (highThreshold !== null && highTriggered && solde < highThreshold * 0.9) {
+      setAlertSettings((prev) => ({ ...prev, highTriggered: false }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solde, alertSettings, isLoading]);
 
   const soldeMoisDernier = useMemo(() => {
     const cutoff = daysAgo(30);
@@ -324,6 +500,21 @@ function App() {
       .sort((a, b) => b.value - a.value);
   }, [transactions]);
 
+  const paymentBreakdown = useMemo(() => {
+    const map = {};
+    transactions
+      .filter((t) => t.type === "depense")
+      .forEach((t) => {
+        const key = t.paymentMethod || "especes";
+        map[key] = (map[key] || 0) + t.amount;
+      });
+    const entries = Object.entries(map)
+      .map(([key, value]) => ({ ...getPaymentMethod(key), value: Math.round(value * 100) / 100 }))
+      .sort((a, b) => b.value - a.value);
+    const max = Math.max(...entries.map((e) => e.value), 1);
+    return entries.map((e) => ({ ...e, pct: (e.value / max) * 100 }));
+  }, [transactions]);
+
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter((t) => (filterType === "toutes" ? true : t.type === filterType))
@@ -339,6 +530,8 @@ function App() {
     () => [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5),
     [transactions]
   );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const validateForm = () => {
     const next = {};
@@ -360,10 +553,11 @@ function App() {
       description: form.description.trim(),
       amount: Number(form.amount),
       date: new Date(),
+      paymentMethod: form.paymentMethod,
     };
 
     setTransactions((prev) => [nouvelleTransaction, ...prev]);
-    setForm({ type: "depense", category: "Nourriture", description: "", amount: "" });
+    setForm({ type: "depense", category: "Nourriture", description: "", amount: "", paymentMethod: "especes" });
     setErrors({});
     setShowAdd(false);
     setToast(form.type === "revenu" ? "Revenu ajouté ✅" : "Dépense ajoutée ✅");
@@ -381,6 +575,59 @@ function App() {
     setToast("Données réinitialisées 🔄");
   };
 
+  const terminerInscription = (e) => {
+    e.preventDefault();
+    const name = onboardingName.trim();
+    if (!name) {
+      setOnboardingError("Entre ton prénom pour continuer.");
+      return;
+    }
+    const nouveauProfil = { name };
+    setProfile(nouveauProfil);
+    saveProfile(nouveauProfil);
+    setIsOnboarded(true);
+    setOnboardingError("");
+  };
+
+  const enregistrerProfil = (e) => {
+    e.preventDefault();
+    const name = editProfileName.trim();
+    if (!name) return;
+    setProfile({ ...profile, name });
+    setShowEditProfile(false);
+    setToast("Profil mis à jour ✅");
+  };
+
+  const changerDeProfil = () => {
+    setProfile(null);
+    setIsOnboarded(false);
+    setOnboardingName("");
+    setShowChangeProfileConfirm(false);
+    setShowAdvancedSettings(false);
+  };
+
+  const marquerLu = (id) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  };
+
+  const marquerToutLu = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const enregistrerSeuils = (e) => {
+    e.preventDefault();
+    const rawLow = alertLowInput === "" ? null : Number(alertLowInput);
+    const rawHigh = alertHighInput === "" ? null : Number(alertHighInput);
+    const toUSD = (v) => (v === null || isNaN(v) ? null : currency === "CDF" ? v / EXCHANGE_RATE : v);
+    setAlertSettings({
+      lowThreshold: toUSD(rawLow),
+      highThreshold: toUSD(rawHigh),
+      lowTriggered: false,
+      highTriggered: false,
+    });
+    setToast("Seuils d'alerte mis à jour ✅");
+  };
+
   const renderTransactionRow = (t) => (
     <div className="transaction" key={t.id}>
       <div className="transaction-icon" style={{ background: `${CATEGORY_COLORS[t.category]}1a` }}>
@@ -390,7 +637,14 @@ function App() {
       <div className="transaction-info">
         <strong>{t.category}</strong>
         <span>{t.description}</span>
-        <small>{formatRelativeDate(t.date)}</small>
+        <div className="transaction-meta">
+          <small>{formatRelativeDate(t.date)}</small>
+          {t.paymentMethod && (
+            <span className="payment-tag" style={{ color: getPaymentMethod(t.paymentMethod).color }}>
+              {getPaymentMethod(t.paymentMethod).label}
+            </span>
+          )}
+        </div>
       </div>
 
       {confirmDeleteId === t.id ? (
@@ -428,6 +682,42 @@ function App() {
     );
   }
 
+  if (!isOnboarded) {
+    return (
+      <div className="app" data-theme={theme}>
+        <style>{STYLES}</style>
+        <div className="onboarding-screen">
+          <div className="onboarding-card">
+            <img src={LOGO_DATA_URI} alt="Mkelo" className="onboarding-logo" />
+            <h1>Bienvenue sur Mkelo</h1>
+            <p>Ton assistant simple pour suivre ton argent au quotidien.</p>
+
+            <form onSubmit={terminerInscription}>
+              <label htmlFor="onboarding-name">Comment veux-tu qu'on t'appelle ?</label>
+              <input
+                id="onboarding-name"
+                type="text"
+                placeholder="Ton prénom"
+                value={onboardingName}
+                onChange={(e) => {
+                  setOnboardingName(e.target.value);
+                  setOnboardingError("");
+                }}
+                className={onboardingError ? "input-error" : ""}
+                autoFocus
+              />
+              {onboardingError && <span className="error-text">{onboardingError}</span>}
+
+              <button className="submit-button" type="submit">
+                Commencer
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app" data-theme={theme}>
       <style>{STYLES}</style>
@@ -435,12 +725,60 @@ function App() {
       {/* ================= HEADER ================= */}
       <header className="header">
         <div>
-          <p className="greeting">Bonjour, Alexandre 👋</p>
+          <p className="greeting">Bonjour, {profile?.name} 👋</p>
           <h1>Mkelo</h1>
         </div>
-        <button className="notification" aria-label="Notifications">
-          <Bell size={19} />
-        </button>
+
+        <div className="notif-wrap">
+          <button
+            className="notification"
+            aria-label="Notifications"
+            onClick={() => setShowNotifPanel((v) => !v)}
+          >
+            <Bell size={19} />
+            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+          </button>
+
+          {showNotifPanel && (
+            <>
+              <div className="notif-scrim" onClick={() => setShowNotifPanel(false)} />
+              <div className="notif-panel">
+                <div className="notif-panel-header">
+                  <strong>Notifications</strong>
+                  {notifications.length > 0 && (
+                    <button onClick={marquerToutLu} aria-label="Tout marquer comme lu">
+                      <CheckCheck size={14} /> Tout lire
+                    </button>
+                  )}
+                </div>
+
+                <div className="notif-list">
+                  {notifications.length === 0 ? (
+                    <EmptyState label="Aucune notification pour le moment" />
+                  ) : (
+                    notifications.slice(0, 20).map((n) => (
+                      <div
+                        key={n.id}
+                        className={`notif-item ${n.read ? "" : "unread"}`}
+                        onClick={() => marquerLu(n.id)}
+                      >
+                        <span className={`notif-icon ${n.type === "bas" ? "notif-icon-bas" : "notif-icon-haut"}`}>
+                          {n.type === "bas" ? <TrendingDown size={15} /> : <TrendingUp size={15} />}
+                        </span>
+                        <div className="notif-item-info">
+                          <strong>{n.title}</strong>
+                          <span>{n.message}</span>
+                          <small>{formatRelativeDate(n.date)}</small>
+                        </div>
+                        {!n.read && <span className="notif-dot" />}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
       {/* ================= ACCUEIL ================= */}
@@ -604,6 +942,31 @@ function App() {
               </div>
             )}
           </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2>Dépenses par mode de paiement</h2>
+            </div>
+
+            {paymentBreakdown.length === 0 ? (
+              <EmptyState label="Pas encore de dépenses à répartir" />
+            ) : (
+              <div className="payment-breakdown">
+                {paymentBreakdown.map((p) => (
+                  <div className="payment-breakdown-row" key={p.key}>
+                    <div className="payment-breakdown-label">
+                      <span>{p.emoji}</span>
+                      <span>{p.label}</span>
+                    </div>
+                    <div className="payment-breakdown-bar-wrap">
+                      <div className="payment-breakdown-bar" style={{ width: `${p.pct}%`, background: p.color }} />
+                    </div>
+                    <strong>{formatAmount(p.value, currency)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       )}
 
@@ -663,8 +1026,8 @@ function App() {
           </section>
 
           <section className="card profile-card">
-            <div className="profile-avatar">A</div>
-            <h2>Alexandre</h2>
+            <div className="profile-avatar">{profile?.name?.charAt(0).toUpperCase() || "?"}</div>
+            <h2>{profile?.name}</h2>
             <p>Utilisateur Mkelo</p>
 
             <div className="profile-setting">
@@ -689,22 +1052,26 @@ function App() {
               </div>
             </div>
 
-            <button className="profile-button">Modifier mon profil</button>
-            <button className="profile-button">Paramètres avancés</button>
-
-            {showResetConfirm ? (
-              <div className="reset-confirm">
-                <p>Effacer toutes tes transactions ? Cette action est irréversible.</p>
-                <div className="reset-confirm-buttons">
-                  <button className="confirm-yes" onClick={reinitialiserDonnees}>Oui, effacer</button>
-                  <button className="confirm-no" onClick={() => setShowResetConfirm(false)}>Annuler</button>
-                </div>
-              </div>
-            ) : (
-              <button className="profile-button danger" onClick={() => setShowResetConfirm(true)}>
-                Effacer mes données
-              </button>
-            )}
+            <button
+              className="profile-button"
+              onClick={() => {
+                setEditProfileName(profile?.name || "");
+                setShowEditProfile(true);
+              }}
+            >
+              Modifier mon profil
+            </button>
+            <button
+              className="profile-button"
+              onClick={() => {
+                const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * EXCHANGE_RATE) : v));
+                setAlertLowInput(fromUSD(alertSettings?.lowThreshold));
+                setAlertHighInput(fromUSD(alertSettings?.highThreshold));
+                setShowAdvancedSettings(true);
+              }}
+            >
+              Paramètres avancés
+            </button>
           </section>
         </main>
       )}
@@ -799,10 +1166,141 @@ function App() {
               />
               {errors.description && <span className="error-text">{errors.description}</span>}
 
+              <label>Mode de paiement</label>
+              <div className="payment-selector">
+                {PAYMENT_METHODS.map((p) => (
+                  <button
+                    type="button"
+                    key={p.key}
+                    className={`payment-chip ${form.paymentMethod === p.key ? "selected" : ""}`}
+                    style={form.paymentMethod === p.key ? { borderColor: p.color, color: p.color, background: `${p.color}14` } : {}}
+                    onClick={() => setForm({ ...form, paymentMethod: p.key })}
+                  >
+                    <span>{p.emoji}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+
               <button className="submit-button" type="submit">
                 Ajouter la transaction
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE MODIFIER PROFIL ================= */}
+      {showEditProfile && (
+        <div className="modal-overlay" onClick={() => setShowEditProfile(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Modifier mon profil</h2>
+              <button onClick={() => setShowEditProfile(false)} aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={enregistrerProfil}>
+              <label htmlFor="edit-name">Prénom</label>
+              <input
+                id="edit-name"
+                type="text"
+                value={editProfileName}
+                onChange={(e) => setEditProfileName(e.target.value)}
+                autoFocus
+              />
+
+              <button className="submit-button" type="submit">
+                Enregistrer
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE PARAMÈTRES AVANCÉS ================= */}
+      {showAdvancedSettings && (
+        <div
+          className="modal-overlay"
+          onClick={() => { setShowAdvancedSettings(false); setShowResetConfirm(false); setShowChangeProfileConfirm(false); }}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Paramètres avancés</h2>
+              <button
+                onClick={() => { setShowAdvancedSettings(false); setShowResetConfirm(false); setShowChangeProfileConfirm(false); }}
+                aria-label="Fermer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="settings-list">
+              <div className="alert-thresholds">
+                <p className="settings-hint">
+                  Mkelo t'envoie une notification quand ton solde descend sous ton seuil bas, ou dépasse ton seuil haut.
+                </p>
+                <form onSubmit={enregistrerSeuils}>
+                  <label htmlFor="alert-low">Seuil bas ({currency})</label>
+                  <input
+                    id="alert-low"
+                    type="number"
+                    step="0.01"
+                    placeholder="Ex : 50"
+                    value={alertLowInput}
+                    onChange={(e) => setAlertLowInput(e.target.value)}
+                  />
+
+                  <label htmlFor="alert-high">Seuil haut ({currency})</label>
+                  <input
+                    id="alert-high"
+                    type="number"
+                    step="0.01"
+                    placeholder="Ex : 800"
+                    value={alertHighInput}
+                    onChange={(e) => setAlertHighInput(e.target.value)}
+                  />
+
+                  <button className="submit-button" type="submit">
+                    Enregistrer les seuils
+                  </button>
+                </form>
+              </div>
+
+              {showChangeProfileConfirm ? (
+                <div className="reset-confirm">
+                  <p>Changer de profil te ramène à l'écran d'accueil. Tes transactions restent enregistrées sur cet appareil.</p>
+                  <div className="reset-confirm-buttons">
+                    <button className="confirm-yes" onClick={changerDeProfil}>Oui, changer</button>
+                    <button className="confirm-no" onClick={() => setShowChangeProfileConfirm(false)}>Annuler</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="profile-button" onClick={() => setShowChangeProfileConfirm(true)}>
+                  Changer de profil
+                </button>
+              )}
+
+              {showResetConfirm ? (
+                <div className="reset-confirm">
+                  <p>Effacer toutes tes transactions ? Cette action est irréversible.</p>
+                  <div className="reset-confirm-buttons">
+                    <button className="confirm-yes" onClick={reinitialiserDonnees}>Oui, effacer</button>
+                    <button className="confirm-no" onClick={() => setShowResetConfirm(false)}>Annuler</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="profile-button danger" onClick={() => setShowResetConfirm(true)}>
+                  Effacer mes données
+                </button>
+              )}
+
+              <div className="about-block">
+                <strong>Mkelo</strong>
+                <span>Version 1.0.0 — Gestion financière personnelle pour la RDC</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -968,6 +1466,25 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 .transaction-info strong { font-size: 14px; }
 .transaction-info span { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transaction-info small { color: var(--text-faint); font-size: 10px; }
+.transaction-meta { display: flex; align-items: center; gap: 7px; }
+.payment-tag {
+  display: inline-flex; align-items: center; font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px; border: 1px solid currentColor;
+}
+
+.payment-selector { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.payment-chip {
+  display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 30px;
+  border: 1.5px solid var(--border); background: var(--bg); color: var(--text-muted); font-size: 12px; font-weight: 600;
+}
+.payment-chip.selected { font-weight: 800; }
+
+.payment-breakdown { display: flex; flex-direction: column; gap: 13px; }
+.payment-breakdown-row { display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 10px; }
+.payment-breakdown-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.payment-breakdown-bar-wrap { height: 8px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.payment-breakdown-bar { height: 100%; border-radius: 6px; }
+.payment-breakdown-row strong { font-size: 12px; white-space: nowrap; }
 .amount { font-size: 13px; white-space: nowrap; }
 .income-text { color: var(--income); }
 .expense-text { color: var(--expense); }
@@ -1068,6 +1585,90 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.onboarding-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.onboarding-card { width: min(100%, 420px); text-align: center; }
+.onboarding-logo {
+  width: 68px; height: 68px; margin: 0 auto 18px; display: block;
+  border-radius: 22px; box-shadow: 0 10px 25px var(--shadow);
+}
+.onboarding-card h1 { margin: 0 0 8px; font-size: 24px; color: var(--accent-dark); }
+.onboarding-card p { margin: 0 0 26px; color: var(--text-muted); font-size: 14px; }
+.onboarding-card form { display: flex; flex-direction: column; gap: 9px; text-align: left; }
+.onboarding-card label { color: var(--text); font-size: 13px; font-weight: 700; }
+.onboarding-card input {
+  width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 13px;
+  outline: none; background: var(--card-bg); color: var(--text); font-size: 15px;
+}
+.onboarding-card input:focus { border-color: var(--accent); }
+.onboarding-card .submit-button { margin-top: 10px; }
+
+.notif-wrap { position: relative; }
+.notification { position: relative; }
+.notif-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center; border-radius: 20px;
+  background: var(--expense); color: white; font-size: 10px; font-weight: 800;
+  border: 2px solid var(--card-bg);
+}
+
+.notif-scrim { position: fixed; inset: 0; z-index: 90; background: transparent; }
+
+.notif-panel {
+  position: absolute; top: 52px; right: 0; z-index: 95; width: min(340px, 88vw);
+  max-height: 420px; display: flex; flex-direction: column;
+  border-radius: 18px; background: var(--card-bg); box-shadow: 0 15px 40px var(--shadow);
+  overflow: hidden;
+}
+.notif-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.notif-panel-header strong { font-size: 14px; }
+.notif-panel-header button {
+  display: flex; align-items: center; gap: 4px; border: none; background: none;
+  color: var(--accent); font-size: 11px; font-weight: 700;
+}
+
+.notif-list { overflow-y: auto; padding: 4px 8px; }
+.notif-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-item.unread { background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 12px; }
+.notif-icon {
+  flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+}
+.notif-icon-bas { background: var(--expense-bg); color: var(--expense); }
+.notif-icon-haut { background: var(--income-bg); color: var(--income); }
+.notif-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.notif-item-info strong { font-size: 12.5px; }
+.notif-item-info span { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+.notif-item-info small { font-size: 10px; color: var(--text-faint); }
+.notif-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+
+.alert-thresholds { display: flex; flex-direction: column; gap: 4px; }
+.settings-hint { margin: 0 0 6px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.alert-thresholds form { display: flex; flex-direction: column; gap: 7px; }
+.alert-thresholds label { color: var(--text); font-size: 13px; font-weight: 700; }
+.alert-thresholds input {
+  width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+  outline: none; background: var(--bg); color: var(--text);
+}
+.alert-thresholds input:focus { border-color: var(--accent); }
+.alert-thresholds .submit-button { margin-top: 4px; padding: 12px; }
+
+.settings-list { display: flex; flex-direction: column; gap: 16px; }
+.about-block {
+  margin-top: 8px; padding: 14px; border-radius: 13px; background: var(--bg);
+  display: flex; flex-direction: column; gap: 4px; text-align: center;
+}
+.about-block strong { color: var(--text); font-size: 14px; }
+.about-block span { color: var(--text-muted); font-size: 11px; }
 
 .bottom-nav {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 15;
