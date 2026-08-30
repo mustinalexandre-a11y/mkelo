@@ -765,6 +765,15 @@ function App() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  const supprimerNotification = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const effacerToutesNotifications = () => {
+    setNotifications([]);
+    setToast("Notifications effacées 🗑️");
+  };
+
   const enregistrerSeuils = (e) => {
     e.preventDefault();
     const rawLow = alertLowInput === "" ? null : Number(alertLowInput);
@@ -977,9 +986,14 @@ function App() {
                 <div className="notif-panel-header">
                   <strong>Notifications</strong>
                   {notifications.length > 0 && (
-                    <button onClick={marquerToutLu} aria-label="Tout marquer comme lu">
-                      <CheckCheck size={14} /> Tout lire
-                    </button>
+                    <div className="notif-panel-actions">
+                      <button onClick={marquerToutLu} aria-label="Tout marquer comme lu">
+                        <CheckCheck size={14} /> Tout lire
+                      </button>
+                      <button onClick={effacerToutesNotifications} aria-label="Tout effacer" className="notif-clear-all">
+                        <Trash2 size={14} /> Tout effacer
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1002,6 +1016,16 @@ function App() {
                           <small>{formatRelativeDate(n.date)}</small>
                         </div>
                         {!n.read && <span className="notif-dot" />}
+                        <button
+                          className="notif-delete-btn"
+                          aria-label="Supprimer cette notification"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            supprimerNotification(n.id);
+                          }}
+                        >
+                          <X size={13} />
+                        </button>
                       </div>
                     ))
                   )}
@@ -2233,14 +2257,16 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
   padding: 14px 16px; border-bottom: 1px solid var(--border);
 }
 .notif-panel-header strong { font-size: 14px; }
+.notif-panel-actions { display: flex; align-items: center; gap: 10px; }
 .notif-panel-header button {
   display: flex; align-items: center; gap: 4px; border: none; background: none;
-  color: var(--accent); font-size: 11px; font-weight: 700;
+  color: var(--accent); font-size: 11px; font-weight: 700; white-space: nowrap;
 }
+.notif-clear-all { color: var(--expense) !important; }
 
 .notif-list { overflow-y: auto; padding: 4px 8px; }
 .notif-item {
-  display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px;
+  position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 12px 30px 12px 8px;
   border-bottom: 1px solid var(--border); cursor: pointer;
 }
 .notif-item:last-child { border-bottom: none; }
@@ -2256,6 +2282,11 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 .notif-item-info span { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
 .notif-item-info small { font-size: 10px; color: var(--text-faint); }
 .notif-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+.notif-delete-btn {
+  position: absolute; top: 10px; right: 4px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; background: transparent; color: var(--text-faint);
+}
+.notif-delete-btn:hover { background: var(--expense-bg); color: var(--expense); }
 
 .alert-thresholds { display: flex; flex-direction: column; gap: 4px; }
 .settings-hint { margin: 0 0 6px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
