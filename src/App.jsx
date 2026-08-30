@@ -66,7 +66,12 @@ const CATEGORY_COLORS = {
 };
 
 const CATEGORIES = Object.keys(CATEGORY_ICONS);
-const EXCHANGE_RATE = 2850; // FC pour 1 USD (taux indicatif)
+const DEFAULT_EXCHANGE_RATE = 2200; // FC pour 1 USD, valeur de départ modifiable par l'utilisateur
+
+let activeExchangeRate = DEFAULT_EXCHANGE_RATE;
+function setActiveExchangeRate(rate) {
+  if (rate && !isNaN(rate) && rate > 0) activeExchangeRate = rate;
+}
 
 const AVATARS = [
   { key: "lion", emoji: "🦁", color: "#F59E0B" },
@@ -126,7 +131,7 @@ function formatRelativeDate(date) {
 
 function formatAmount(amountUSD, currency) {
   if (currency === "CDF") {
-    const value = Math.round(amountUSD * EXCHANGE_RATE);
+    const value = Math.round(amountUSD * activeExchangeRate);
     return `${value.toLocaleString("fr-FR")} FC`;
   }
   return `$${amountUSD.toFixed(2)}`;
@@ -342,6 +347,8 @@ async function saveSavingsGoal(savingsGoal) {
 function App() {
   const [theme, setTheme] = useState("clair");
   const [currency, setCurrency] = useState("USD");
+  const [exchangeRate, setExchangeRate] = useState(DEFAULT_EXCHANGE_RATE);
+  const [exchangeRateInput, setExchangeRateInput] = useState("");
   const [activeTab, setActiveTab] = useState("accueil");
   const [showAdd, setShowAdd] = useState(false);
   const [period, setPeriod] = useState("semaine");
@@ -428,6 +435,7 @@ function App() {
       if (storedPrefs) {
         if (storedPrefs.theme) setTheme(storedPrefs.theme);
         if (storedPrefs.currency) setCurrency(storedPrefs.currency);
+        if (storedPrefs.exchangeRate) setExchangeRate(storedPrefs.exchangeRate);
       }
 
       if (storedProfile && storedProfile.name) {
@@ -454,11 +462,11 @@ function App() {
     saveTransactions(transactions);
   }, [transactions, isLoading]);
 
-  // Sauvegarde automatique des préférences (devise, thème)
+  // Sauvegarde automatique des préférences (devise, thème, taux de change)
   useEffect(() => {
     if (isLoading) return;
-    savePrefs({ theme, currency });
-  }, [theme, currency, isLoading]);
+    savePrefs({ theme, currency, exchangeRate });
+  }, [theme, currency, exchangeRate, isLoading]);
 
   // Sauvegarde automatique du profil
   useEffect(() => {
@@ -761,7 +769,7 @@ function App() {
     e.preventDefault();
     const rawLow = alertLowInput === "" ? null : Number(alertLowInput);
     const rawHigh = alertHighInput === "" ? null : Number(alertHighInput);
-    const toUSD = (v) => (v === null || isNaN(v) ? null : currency === "CDF" ? v / EXCHANGE_RATE : v);
+    const toUSD = (v) => (v === null || isNaN(v) ? null : currency === "CDF" ? v / exchangeRate : v);
     setAlertSettings({
       lowThreshold: toUSD(rawLow),
       highThreshold: toUSD(rawHigh),
@@ -769,6 +777,14 @@ function App() {
       highTriggered: false,
     });
     setToast("Seuils d'alerte mis à jour ✅");
+  };
+
+  const enregistrerTauxDeChange = (e) => {
+    e.preventDefault();
+    const rate = Number(exchangeRateInput);
+    if (!exchangeRateInput || isNaN(rate) || rate <= 0) return;
+    setExchangeRate(rate);
+    setToast("Taux de change mis à jour ✅");
   };
 
   const ajouterDette = (e) => {
@@ -805,7 +821,7 @@ function App() {
     e.preventDefault();
     const label = savingsLabelInput.trim() || "Mon épargne";
     const rawTarget = savingsTargetInput === "" ? null : Number(savingsTargetInput);
-    const targetUSD = rawTarget === null || isNaN(rawTarget) ? null : currency === "CDF" ? rawTarget / EXCHANGE_RATE : rawTarget;
+    const targetUSD = rawTarget === null || isNaN(rawTarget) ? null : currency === "CDF" ? rawTarget / exchangeRate : rawTarget;
     setSavingsGoal((prev) => ({ label, target: targetUSD, current: prev?.current || 0 }));
     setShowEditSavings(false);
     setToast("Objectif d'épargne mis à jour ✅");
@@ -815,7 +831,7 @@ function App() {
     e.preventDefault();
     const raw = Number(contributionInput);
     if (!contributionInput || isNaN(raw) || raw <= 0) return;
-    const usdAmount = currency === "CDF" ? raw / EXCHANGE_RATE : raw;
+    const usdAmount = currency === "CDF" ? raw / exchangeRate : raw;
     setSavingsGoal((prev) => ({
       ...(prev || { label: "Mon épargne", target: null }),
       current: (prev?.current || 0) + usdAmount,
@@ -866,6 +882,8 @@ function App() {
       )}
     </div>
   );
+
+  setActiveExchangeRate(exchangeRate);
 
   if (isLoading) {
     return (
@@ -1309,7 +1327,7 @@ function App() {
               <button
                 onClick={() => {
                   setSavingsLabelInput(savingsGoal?.label || "");
-                  const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * EXCHANGE_RATE) : v));
+                  const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * exchangeRate) : v));
                   setSavingsTargetInput(fromUSD(savingsGoal?.target));
                   setShowEditSavings(true);
                 }}
@@ -1466,9 +1484,10 @@ function App() {
             <button
               className="profile-button"
               onClick={() => {
-                const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * EXCHANGE_RATE) : v));
+                const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * exchangeRate) : v));
                 setAlertLowInput(fromUSD(alertSettings?.lowThreshold));
                 setAlertHighInput(fromUSD(alertSettings?.highThreshold));
+                setExchangeRateInput(String(exchangeRate));
                 setShowAdvancedSettings(true);
               }}
             >
@@ -1655,6 +1674,27 @@ function App() {
             </div>
 
             <div className="settings-list">
+              <div className="alert-thresholds">
+                <p className="settings-hint">
+                  Taux utilisé pour convertir tes montants entre USD et CDF partout dans l'app.
+                </p>
+                <form onSubmit={enregistrerTauxDeChange}>
+                  <label htmlFor="exchange-rate">1 USD = ? FC</label>
+                  <input
+                    id="exchange-rate"
+                    type="number"
+                    step="1"
+                    placeholder="Ex : 2200"
+                    value={exchangeRateInput}
+                    onChange={(e) => setExchangeRateInput(e.target.value)}
+                  />
+
+                  <button className="submit-button" type="submit">
+                    Enregistrer le taux
+                  </button>
+                </form>
+              </div>
+
               <div className="alert-thresholds">
                 <p className="settings-hint">
                   Mkelo t'envoie une notification quand ton solde descend sous ton seuil bas, ou dépasse ton seuil haut.
