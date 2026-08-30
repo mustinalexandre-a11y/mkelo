@@ -16,6 +16,11 @@ import {
   Sun,
   Wallet,
   CheckCheck,
+  HandCoins,
+  PiggyBank,
+  Lightbulb,
+  Sparkles,
+  ChevronLeft,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -63,6 +68,23 @@ const CATEGORY_COLORS = {
 const CATEGORIES = Object.keys(CATEGORY_ICONS);
 const EXCHANGE_RATE = 2850; // FC pour 1 USD (taux indicatif)
 
+const AVATARS = [
+  { key: "lion", emoji: "🦁", color: "#F59E0B" },
+  { key: "tigre", emoji: "🐯", color: "#EA580C" },
+  { key: "panda", emoji: "🐼", color: "#0EA5E9" },
+  { key: "renard", emoji: "🦊", color: "#DC2626" },
+  { key: "grenouille", emoji: "🐸", color: "#16A34A" },
+  { key: "singe", emoji: "🐵", color: "#92400E" },
+  { key: "hibou", emoji: "🦉", color: "#7C3AED" },
+  { key: "koala", emoji: "🐨", color: "#64748B" },
+  { key: "pingouin", emoji: "🐧", color: "#1E293B" },
+  { key: "licorne", emoji: "🦄", color: "#DB2777" },
+];
+
+function getAvatar(key) {
+  return AVATARS.find((a) => a.key === key) || null;
+}
+
 const PAYMENT_METHODS = [
   { key: "especes", label: "Espèces", color: "#64748b", emoji: "💵" },
   { key: "airtel", label: "Airtel Money", color: "#E4032E", emoji: "📱" },
@@ -77,6 +99,8 @@ const STORAGE_KEYS = {
   profile: "mkelo:profile",
   notifications: "mkelo:notifications",
   alerts: "mkelo:alerts",
+  debts: "mkelo:debts",
+  savings: "mkelo:savings",
 };
 
 // Génère une date à J-n jours
@@ -86,9 +110,6 @@ const daysAgo = (n) => {
   d.setHours(9 + (n % 6), 0, 0, 0);
   return d;
 };
-
-// Aucune transaction préchargée : chaque nouveau client commence à zéro.
-const SEED_TRANSACTIONS = [];
 
 /* ============================================================
    FONCTIONS UTILITAIRES
@@ -273,6 +294,47 @@ async function saveAlertSettings(alertSettings) {
   }
 }
 
+async function loadDebts() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.debts);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map((d) => ({ ...d, date: new Date(d.date) }));
+    }
+  } catch (e) {
+    // pas encore de dettes enregistrées
+  }
+  return null;
+}
+
+async function saveDebts(debts) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.debts, JSON.stringify(debts));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadSavingsGoal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.savings);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // pas encore d'objectif enregistré
+  }
+  return null;
+}
+
+async function saveSavingsGoal(savingsGoal) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.savings, JSON.stringify(savingsGoal));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* ============================================================
    APP
    ============================================================ */
@@ -294,9 +356,11 @@ function App() {
   const [profile, setProfile] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [onboardingName, setOnboardingName] = useState("");
+  const [onboardingAvatar, setOnboardingAvatar] = useState(AVATARS[0].key);
   const [onboardingError, setOnboardingError] = useState("");
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editProfileName, setEditProfileName] = useState("");
+  const [editProfileAvatar, setEditProfileAvatar] = useState(AVATARS[0].key);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showChangeProfileConfirm, setShowChangeProfileConfirm] = useState(false);
 
@@ -305,6 +369,19 @@ function App() {
   const [alertSettings, setAlertSettings] = useState(null);
   const [alertLowInput, setAlertLowInput] = useState("");
   const [alertHighInput, setAlertHighInput] = useState("");
+
+  const [debts, setDebts] = useState([]);
+  const [showAddDebt, setShowAddDebt] = useState(false);
+  const [debtForm, setDebtForm] = useState({ type: "on-me-doit", person: "", amount: "", description: "" });
+  const [debtErrors, setDebtErrors] = useState({});
+  const [confirmDeleteDebtId, setConfirmDeleteDebtId] = useState(null);
+
+  const [savingsGoal, setSavingsGoal] = useState(null);
+  const [showEditSavings, setShowEditSavings] = useState(false);
+  const [savingsLabelInput, setSavingsLabelInput] = useState("");
+  const [savingsTargetInput, setSavingsTargetInput] = useState("");
+  const [showAddContribution, setShowAddContribution] = useState(false);
+  const [contributionInput, setContributionInput] = useState("");
 
   const [transactions, setTransactions] = useState([]);
 
@@ -321,12 +398,22 @@ function App() {
     let cancelled = false;
 
     (async () => {
-      const [storedTransactions, storedPrefs, storedProfile, storedNotifications, storedAlertSettings] = await Promise.all([
+      const [
+        storedTransactions,
+        storedPrefs,
+        storedProfile,
+        storedNotifications,
+        storedAlertSettings,
+        storedDebts,
+        storedSavingsGoal,
+      ] = await Promise.all([
         loadTransactions(),
         loadPrefs(),
         loadProfile(),
         loadNotifications(),
         loadAlertSettings(),
+        loadDebts(),
+        loadSavingsGoal(),
       ]);
 
       if (cancelled) return;
@@ -350,6 +437,8 @@ function App() {
 
       if (storedNotifications) setNotifications(storedNotifications);
       if (storedAlertSettings) setAlertSettings(storedAlertSettings);
+      if (storedDebts) setDebts(storedDebts);
+      if (storedSavingsGoal) setSavingsGoal(storedSavingsGoal);
 
       setIsLoading(false);
     })();
@@ -389,6 +478,18 @@ function App() {
     saveAlertSettings(alertSettings);
   }, [alertSettings, isLoading]);
 
+  // Sauvegarde automatique des dettes
+  useEffect(() => {
+    if (isLoading) return;
+    saveDebts(debts);
+  }, [debts, isLoading]);
+
+  // Sauvegarde automatique de l'objectif d'épargne
+  useEffect(() => {
+    if (isLoading || !savingsGoal) return;
+    saveSavingsGoal(savingsGoal);
+  }, [savingsGoal, isLoading]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
@@ -404,6 +505,15 @@ function App() {
     [transactions]
   );
   const solde = totalRevenus - totalDepenses;
+
+  const totalOnMeDoit = useMemo(
+    () => debts.filter((d) => d.type === "on-me-doit").reduce((s, d) => s + d.amount, 0),
+    [debts]
+  );
+  const totalJeDois = useMemo(
+    () => debts.filter((d) => d.type === "je-dois").reduce((s, d) => s + d.amount, 0),
+    [debts]
+  );
 
   const ajouterNotification = ({ type, title, message }) => {
     setNotifications((prev) => [
@@ -497,6 +607,57 @@ function App() {
     return entries.map((e) => ({ ...e, pct: (e.value / max) * 100 }));
   }, [transactions]);
 
+  const insights = useMemo(() => {
+    const list = [];
+    const now = new Date();
+    const daysSince = (d) => Math.floor((now - new Date(d)) / 86400000);
+
+    const semaineActuelle = transactions
+      .filter((t) => t.type === "depense" && daysSince(t.date) < 7)
+      .reduce((s, t) => s + t.amount, 0);
+    const semainePrecedente = transactions
+      .filter((t) => t.type === "depense" && daysSince(t.date) >= 7 && daysSince(t.date) < 14)
+      .reduce((s, t) => s + t.amount, 0);
+
+    if (semainePrecedente > 0) {
+      const pct = Math.round(((semaineActuelle - semainePrecedente) / semainePrecedente) * 100);
+      if (pct > 5) {
+        list.push({ icon: "up", text: `Tu as dépensé ${pct}% de plus cette semaine que la semaine dernière.` });
+      } else if (pct < -5) {
+        list.push({ icon: "down", text: `Tu as dépensé ${Math.abs(pct)}% de moins cette semaine que la semaine dernière. 👏` });
+      }
+    }
+
+    if (categoryBreakdown.length > 0 && totalDepenses > 0) {
+      const top = categoryBreakdown[0];
+      const pct = Math.round((top.value / totalDepenses) * 100);
+      list.push({ icon: "category", text: `${CATEGORY_ICONS[top.name] || ""} ${top.name} est ta plus grosse dépense (${pct}% du total).` });
+    }
+
+    if (paymentBreakdown.length > 0) {
+      const top = paymentBreakdown[0];
+      list.push({ icon: "payment", text: `${top.emoji} ${top.label} est ton mode de paiement le plus utilisé.` });
+    }
+
+    if (savingsGoal?.target) {
+      const remaining = savingsGoal.target - savingsGoal.current;
+      if (remaining > 0) {
+        list.push({ icon: "savings", text: `Encore ${formatAmount(remaining, currency)} avant d'atteindre "${savingsGoal.label}".` });
+      } else {
+        list.push({ icon: "savings", text: `🎉 Objectif "${savingsGoal.label}" atteint !` });
+      }
+    }
+
+    if (totalOnMeDoit > 0) {
+      list.push({ icon: "debt", text: `On te doit au total ${formatAmount(totalOnMeDoit, currency)}.` });
+    }
+    if (totalJeDois > 0) {
+      list.push({ icon: "debt", text: `Tu dois encore ${formatAmount(totalJeDois, currency)} à rembourser.` });
+    }
+
+    return list;
+  }, [transactions, categoryBreakdown, paymentBreakdown, totalDepenses, savingsGoal, totalOnMeDoit, totalJeDois, currency]);
+
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter((t) => (filterType === "toutes" ? true : t.type === filterType))
@@ -564,7 +725,7 @@ function App() {
       setOnboardingError("Entre ton prénom pour continuer.");
       return;
     }
-    const nouveauProfil = { name };
+    const nouveauProfil = { name, avatar: onboardingAvatar };
     setProfile(nouveauProfil);
     saveProfile(nouveauProfil);
     setIsOnboarded(true);
@@ -575,7 +736,7 @@ function App() {
     e.preventDefault();
     const name = editProfileName.trim();
     if (!name) return;
-    setProfile({ ...profile, name });
+    setProfile({ ...profile, name, avatar: editProfileAvatar });
     setShowEditProfile(false);
     setToast("Profil mis à jour ✅");
   };
@@ -608,6 +769,60 @@ function App() {
       highTriggered: false,
     });
     setToast("Seuils d'alerte mis à jour ✅");
+  };
+
+  const ajouterDette = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!debtForm.person.trim()) errs.person = "Indique le nom de la personne.";
+    const amt = Number(debtForm.amount);
+    if (!debtForm.amount || isNaN(amt) || amt <= 0) errs.amount = "Entre un montant valide.";
+    setDebtErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    const nouvelleDette = {
+      id: Date.now(),
+      type: debtForm.type,
+      person: debtForm.person.trim(),
+      description: debtForm.description.trim(),
+      amount: amt,
+      date: new Date(),
+    };
+    setDebts((prev) => [nouvelleDette, ...prev]);
+    setDebtForm({ type: "on-me-doit", person: "", amount: "", description: "" });
+    setDebtErrors({});
+    setShowAddDebt(false);
+    setToast("Dette ajoutée ✅");
+  };
+
+  const supprimerDette = (id) => {
+    setDebts((prev) => prev.filter((d) => d.id !== id));
+    setConfirmDeleteDebtId(null);
+    setToast("Dette marquée comme remboursée 🎉");
+  };
+
+  const enregistrerObjectifEpargne = (e) => {
+    e.preventDefault();
+    const label = savingsLabelInput.trim() || "Mon épargne";
+    const rawTarget = savingsTargetInput === "" ? null : Number(savingsTargetInput);
+    const targetUSD = rawTarget === null || isNaN(rawTarget) ? null : currency === "CDF" ? rawTarget / EXCHANGE_RATE : rawTarget;
+    setSavingsGoal((prev) => ({ label, target: targetUSD, current: prev?.current || 0 }));
+    setShowEditSavings(false);
+    setToast("Objectif d'épargne mis à jour ✅");
+  };
+
+  const ajouterContribution = (e) => {
+    e.preventDefault();
+    const raw = Number(contributionInput);
+    if (!contributionInput || isNaN(raw) || raw <= 0) return;
+    const usdAmount = currency === "CDF" ? raw / EXCHANGE_RATE : raw;
+    setSavingsGoal((prev) => ({
+      ...(prev || { label: "Mon épargne", target: null }),
+      current: (prev?.current || 0) + usdAmount,
+    }));
+    setContributionInput("");
+    setShowAddContribution(false);
+    setToast("Ajouté à ton épargne 💰");
   };
 
   const renderTransactionRow = (t) => (
@@ -689,6 +904,22 @@ function App() {
                 autoFocus
               />
               {onboardingError && <span className="error-text">{onboardingError}</span>}
+
+              <label>Choisis ton personnage</label>
+              <div className="avatar-picker">
+                {AVATARS.map((a) => (
+                  <button
+                    type="button"
+                    key={a.key}
+                    className={`avatar-option ${onboardingAvatar === a.key ? "selected" : ""}`}
+                    style={{ background: `${a.color}22`, borderColor: onboardingAvatar === a.key ? a.color : "transparent" }}
+                    onClick={() => setOnboardingAvatar(a.key)}
+                    aria-label={a.key}
+                  >
+                    {a.emoji}
+                  </button>
+                ))}
+              </div>
 
               <button className="submit-button" type="submit">
                 Commencer
@@ -827,6 +1058,41 @@ function App() {
               )}
             </div>
           </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2>Dettes & Épargne</h2>
+              <button onClick={() => setActiveTab("dettes")}>Voir tout</button>
+            </div>
+
+            <div className="mini-stats">
+              <div className="mini-stat">
+                <span>On me doit</span>
+                <strong className="income-text">{formatAmount(totalOnMeDoit, currency)}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Je dois</span>
+                <strong className="expense-text">{formatAmount(totalJeDois, currency)}</strong>
+              </div>
+            </div>
+
+            {savingsGoal?.target ? (
+              <div className="savings-progress-mini">
+                <div className="savings-progress-mini-header">
+                  <span>{savingsGoal.label}</span>
+                  <strong>{formatAmount(savingsGoal.current, currency)} / {formatAmount(savingsGoal.target, currency)}</strong>
+                </div>
+                <div className="progress-bar-wrap">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${Math.min(100, (savingsGoal.current / savingsGoal.target) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="settings-hint">Aucun objectif d'épargne défini pour l'instant.</p>
+            )}
+          </section>
         </main>
       )}
 
@@ -836,6 +1102,32 @@ function App() {
           <section className="page-title">
             <h2>Évolution</h2>
             <p>Analyse de ton argent</p>
+          </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2><Lightbulb size={17} className="section-icon" /> Insights intelligents</h2>
+            </div>
+
+            {insights.length === 0 ? (
+              <EmptyState label="Ajoute quelques transactions pour débloquer tes premiers insights" />
+            ) : (
+              <div className="insights-list">
+                {insights.map((ins, i) => (
+                  <div className="insight-item" key={i}>
+                    <span className="insight-icon">
+                      {ins.icon === "up" && <TrendingUp size={15} />}
+                      {ins.icon === "down" && <TrendingDown size={15} />}
+                      {ins.icon === "category" && <Sparkles size={15} />}
+                      {ins.icon === "payment" && <Wallet size={15} />}
+                      {ins.icon === "savings" && <PiggyBank size={15} />}
+                      {ins.icon === "debt" && <HandCoins size={15} />}
+                    </span>
+                    <span>{ins.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="card evolution-page">
@@ -999,6 +1291,127 @@ function App() {
         </main>
       )}
 
+      {/* ================= DETTES & ÉPARGNE ================= */}
+      {activeTab === "dettes" && (
+        <main>
+          <button className="back-link" onClick={() => setActiveTab("accueil")}>
+            <ChevronLeft size={16} /> Retour
+          </button>
+
+          <section className="page-title">
+            <h2>Dettes & Épargne</h2>
+            <p>Ce qu'on te doit, ce que tu dois, et ton objectif d'épargne</p>
+          </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2><PiggyBank size={17} className="section-icon" /> Objectif d'épargne</h2>
+              <button
+                onClick={() => {
+                  setSavingsLabelInput(savingsGoal?.label || "");
+                  const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * EXCHANGE_RATE) : v));
+                  setSavingsTargetInput(fromUSD(savingsGoal?.target));
+                  setShowEditSavings(true);
+                }}
+              >
+                Modifier
+              </button>
+            </div>
+
+            {savingsGoal?.target ? (
+              <>
+                <div className="savings-progress-mini-header">
+                  <span>{savingsGoal.label}</span>
+                  <strong>{formatAmount(savingsGoal.current, currency)} / {formatAmount(savingsGoal.target, currency)}</strong>
+                </div>
+                <div className="progress-bar-wrap">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${Math.min(100, (savingsGoal.current / savingsGoal.target) * 100)}%` }}
+                  />
+                </div>
+                <button className="profile-button" onClick={() => setShowAddContribution(true)}>
+                  Ajouter à mon épargne
+                </button>
+              </>
+            ) : (
+              <EmptyState label="Définis un objectif pour commencer à épargner" />
+            )}
+          </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2><HandCoins size={17} className="section-icon" /> Dettes</h2>
+              <button
+                onClick={() => {
+                  setDebtForm({ type: "on-me-doit", person: "", amount: "", description: "" });
+                  setDebtErrors({});
+                  setShowAddDebt(true);
+                }}
+              >
+                + Ajouter
+              </button>
+            </div>
+
+            <div className="mini-stats">
+              <div className="mini-stat">
+                <span>On me doit</span>
+                <strong className="income-text">{formatAmount(totalOnMeDoit, currency)}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Je dois</span>
+                <strong className="expense-text">{formatAmount(totalJeDois, currency)}</strong>
+              </div>
+            </div>
+
+            <div className="transaction-list">
+              {debts.length === 0 ? (
+                <EmptyState label="Aucune dette enregistrée" />
+              ) : (
+                [...debts]
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map((d) => (
+                    <div className="transaction" key={d.id}>
+                      <div
+                        className="transaction-icon"
+                        style={{ background: d.type === "on-me-doit" ? "var(--income-bg)" : "var(--expense-bg)" }}
+                      >
+                        {d.type === "on-me-doit" ? "🤝" : "💸"}
+                      </div>
+
+                      <div className="transaction-info">
+                        <strong>{d.person}</strong>
+                        <span>{d.description || (d.type === "on-me-doit" ? "On me doit" : "Je dois")}</span>
+                        <small>{formatRelativeDate(d.date)}</small>
+                      </div>
+
+                      {confirmDeleteDebtId === d.id ? (
+                        <div className="confirm-row">
+                          <button className="confirm-yes" onClick={() => supprimerDette(d.id)}>Remboursé</button>
+                          <button className="confirm-no" onClick={() => setConfirmDeleteDebtId(null)}>Annuler</button>
+                        </div>
+                      ) : (
+                        <>
+                          <strong className={d.type === "on-me-doit" ? "amount income-text" : "amount expense-text"}>
+                            {formatAmount(d.amount, currency)}
+                          </strong>
+                          <button
+                            className="delete-btn"
+                            aria-label="Marquer comme remboursée"
+                            onClick={() => setConfirmDeleteDebtId(d.id)}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))
+              )}
+            </div>
+          </section>
+        </main>
+      )}
+
       {/* ================= PROFIL ================= */}
       {activeTab === "profil" && (
         <main>
@@ -1008,7 +1421,13 @@ function App() {
           </section>
 
           <section className="card profile-card">
-            <div className="profile-avatar">{profile?.name?.charAt(0).toUpperCase() || "?"}</div>
+            {getAvatar(profile?.avatar) ? (
+              <div className="profile-avatar" style={{ background: `${getAvatar(profile.avatar).color}22` }}>
+                <span>{getAvatar(profile.avatar).emoji}</span>
+              </div>
+            ) : (
+              <div className="profile-avatar">{profile?.name?.charAt(0).toUpperCase() || "?"}</div>
+            )}
             <h2>{profile?.name}</h2>
             <p>Utilisateur Mkelo</p>
 
@@ -1038,6 +1457,7 @@ function App() {
               className="profile-button"
               onClick={() => {
                 setEditProfileName(profile?.name || "");
+                setEditProfileAvatar(profile?.avatar || AVATARS[0].key);
                 setShowEditProfile(true);
               }}
             >
@@ -1193,6 +1613,22 @@ function App() {
                 autoFocus
               />
 
+              <label>Personnage</label>
+              <div className="avatar-picker">
+                {AVATARS.map((a) => (
+                  <button
+                    type="button"
+                    key={a.key}
+                    className={`avatar-option ${editProfileAvatar === a.key ? "selected" : ""}`}
+                    style={{ background: `${a.color}22`, borderColor: editProfileAvatar === a.key ? a.color : "transparent" }}
+                    onClick={() => setEditProfileAvatar(a.key)}
+                    aria-label={a.key}
+                  >
+                    {a.emoji}
+                  </button>
+                ))}
+              </div>
+
               <button className="submit-button" type="submit">
                 Enregistrer
               </button>
@@ -1283,6 +1719,146 @@ function App() {
                 <span>Version 1.0.0 — Gestion financière personnelle pour la RDC</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE AJOUTER DETTE ================= */}
+      {showAddDebt && (
+        <div className="modal-overlay" onClick={() => setShowAddDebt(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ajouter une dette</h2>
+              <button onClick={() => setShowAddDebt(false)} aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={ajouterDette} noValidate>
+              <div className="type-selector">
+                <button
+                  type="button"
+                  className={debtForm.type === "on-me-doit" ? "selected income" : ""}
+                  onClick={() => setDebtForm({ ...debtForm, type: "on-me-doit" })}
+                >
+                  🤝 On me doit
+                </button>
+                <button
+                  type="button"
+                  className={debtForm.type === "je-dois" ? "selected expense" : ""}
+                  onClick={() => setDebtForm({ ...debtForm, type: "je-dois" })}
+                >
+                  💸 Je dois
+                </button>
+              </div>
+
+              <label htmlFor="debt-person">Personne</label>
+              <input
+                id="debt-person"
+                type="text"
+                placeholder="Ex : Grâce, Patrick..."
+                value={debtForm.person}
+                onChange={(e) => setDebtForm({ ...debtForm, person: e.target.value })}
+                className={debtErrors.person ? "input-error" : ""}
+              />
+              {debtErrors.person && <span className="error-text">{debtErrors.person}</span>}
+
+              <label htmlFor="debt-amount">Montant (USD)</label>
+              <input
+                id="debt-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={debtForm.amount}
+                onChange={(e) => setDebtForm({ ...debtForm, amount: e.target.value })}
+                className={debtErrors.amount ? "input-error" : ""}
+              />
+              {debtErrors.amount && <span className="error-text">{debtErrors.amount}</span>}
+
+              <label htmlFor="debt-desc">Description (optionnel)</label>
+              <input
+                id="debt-desc"
+                type="text"
+                placeholder="Ex : Prêt pour le loyer"
+                value={debtForm.description}
+                onChange={(e) => setDebtForm({ ...debtForm, description: e.target.value })}
+              />
+
+              <button className="submit-button" type="submit">
+                Ajouter la dette
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE OBJECTIF D'ÉPARGNE ================= */}
+      {showEditSavings && (
+        <div className="modal-overlay" onClick={() => setShowEditSavings(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Objectif d'épargne</h2>
+              <button onClick={() => setShowEditSavings(false)} aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={enregistrerObjectifEpargne}>
+              <label htmlFor="savings-label">Nom de l'objectif</label>
+              <input
+                id="savings-label"
+                type="text"
+                placeholder="Ex : Acheter une moto"
+                value={savingsLabelInput}
+                onChange={(e) => setSavingsLabelInput(e.target.value)}
+                autoFocus
+              />
+
+              <label htmlFor="savings-target">Montant visé ({currency})</label>
+              <input
+                id="savings-target"
+                type="number"
+                step="0.01"
+                placeholder="Ex : 500"
+                value={savingsTargetInput}
+                onChange={(e) => setSavingsTargetInput(e.target.value)}
+              />
+
+              <button className="submit-button" type="submit">
+                Enregistrer
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE AJOUTER À L'ÉPARGNE ================= */}
+      {showAddContribution && (
+        <div className="modal-overlay" onClick={() => setShowAddContribution(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ajouter à mon épargne</h2>
+              <button onClick={() => setShowAddContribution(false)} aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={ajouterContribution}>
+              <label htmlFor="contribution-amount">Montant ({currency})</label>
+              <input
+                id="contribution-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={contributionInput}
+                onChange={(e) => setContributionInput(e.target.value)}
+                autoFocus
+              />
+
+              <button className="submit-button" type="submit">
+                Ajouter
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -1531,8 +2107,16 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
   width: 75px; height: 75px; margin: 5px auto 15px; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; background: var(--accent); color: white; font-size: 30px; font-weight: 800;
 }
+.profile-avatar span { font-size: 34px; line-height: 1; }
 .profile-card h2 { margin: 0; font-size: 21px; }
 .profile-card p { margin: 5px 0 20px; color: var(--text-muted); }
+
+.avatar-picker { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 4px; margin-bottom: 4px; }
+.avatar-option {
+  width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 2px solid transparent; font-size: 22px; line-height: 1;
+}
+.avatar-option.selected { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px currentColor; }
 
 .profile-setting {
   display: flex; align-items: center; justify-content: space-between;
@@ -1645,6 +2229,37 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 .alert-thresholds .submit-button { margin-top: 4px; padding: 12px; }
 
 .settings-list { display: flex; flex-direction: column; gap: 16px; }
+
+.section-icon { margin-right: 6px; vertical-align: -3px; color: var(--accent); }
+
+.back-link {
+  display: inline-flex; align-items: center; gap: 4px; border: none; background: none;
+  color: var(--text-muted); font-size: 13px; font-weight: 600; padding: 4px 0; margin-bottom: 4px;
+}
+.back-link:hover { color: var(--accent); }
+
+.mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.mini-stat { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 13px; background: var(--bg); }
+.mini-stat span { font-size: 11px; color: var(--text-muted); }
+.mini-stat strong { font-size: 16px; }
+
+.savings-progress-mini { display: flex; flex-direction: column; gap: 8px; }
+.savings-progress-mini-header { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+.savings-progress-mini-header span { color: var(--text-muted); }
+.savings-progress-mini-header strong { color: var(--text); font-size: 13px; }
+
+.progress-bar-wrap { height: 10px; border-radius: 8px; background: var(--bg); overflow: hidden; margin: 4px 0 12px; }
+.progress-bar-fill { height: 100%; border-radius: 8px; background: var(--accent); transition: width 0.3s ease; }
+
+.insights-list { display: flex; flex-direction: column; gap: 10px; }
+.insight-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 11px; border-radius: 13px; background: var(--bg);
+  font-size: 12.5px; color: var(--text); line-height: 1.5;
+}
+.insight-icon {
+  flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 9px; background: var(--card-bg); color: var(--accent);
+}
 .about-block {
   margin-top: 8px; padding: 14px; border-radius: 13px; background: var(--bg);
   display: flex; flex-direction: column; gap: 4px; text-align: center;
