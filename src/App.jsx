@@ -376,6 +376,7 @@ function App() {
   const [alertSettings, setAlertSettings] = useState(null);
   const [alertLowInput, setAlertLowInput] = useState("");
   const [alertHighInput, setAlertHighInput] = useState("");
+  const [alertInputCurrency, setAlertInputCurrency] = useState("USD");
 
   const [debts, setDebts] = useState([]);
   const [showAddDebt, setShowAddDebt] = useState(false);
@@ -395,8 +396,10 @@ function App() {
   const [form, setForm] = useState({
     type: "depense",
     category: "Nourriture",
+    customCategory: "",
     description: "",
     amount: "",
+    amountCurrency: "USD",
     paymentMethod: "especes",
   });
 
@@ -697,18 +700,30 @@ function App() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    const amountUSD = form.amountCurrency === "CDF" ? Number(form.amount) / exchangeRate : Number(form.amount);
+    const categorieFinale =
+      form.category === "Autre" && form.customCategory.trim() ? form.customCategory.trim() : form.category;
+
     const nouvelleTransaction = {
       id: Date.now(),
       type: form.type,
-      category: form.category,
+      category: categorieFinale,
       description: form.description.trim(),
-      amount: Number(form.amount),
+      amount: amountUSD,
       date: new Date(),
       paymentMethod: form.paymentMethod,
     };
 
     setTransactions((prev) => [nouvelleTransaction, ...prev]);
-    setForm({ type: "depense", category: "Nourriture", description: "", amount: "", paymentMethod: "especes" });
+    setForm({
+      type: "depense",
+      category: "Nourriture",
+      customCategory: "",
+      description: "",
+      amount: "",
+      amountCurrency: currency,
+      paymentMethod: "especes",
+    });
     setErrors({});
     setShowAdd(false);
     setToast(form.type === "revenu" ? "Revenu ajouté ✅" : "Dépense ajoutée ✅");
@@ -778,7 +793,7 @@ function App() {
     e.preventDefault();
     const rawLow = alertLowInput === "" ? null : Number(alertLowInput);
     const rawHigh = alertHighInput === "" ? null : Number(alertHighInput);
-    const toUSD = (v) => (v === null || isNaN(v) ? null : currency === "CDF" ? v / exchangeRate : v);
+    const toUSD = (v) => (v === null || isNaN(v) ? null : alertInputCurrency === "CDF" ? v / exchangeRate : v);
     setAlertSettings({
       lowThreshold: toUSD(rawLow),
       highThreshold: toUSD(rawHigh),
@@ -852,7 +867,7 @@ function App() {
 
   const renderTransactionRow = (t) => (
     <div className="transaction" key={t.id}>
-      <div className="transaction-icon" style={{ background: `${CATEGORY_COLORS[t.category]}1a` }}>
+      <div className="transaction-icon" style={{ background: `${CATEGORY_COLORS[t.category] || "#64748b"}1a` }}>
         {CATEGORY_ICONS[t.category] || "🔖"}
       </div>
 
@@ -1508,6 +1523,7 @@ function App() {
             <button
               className="profile-button"
               onClick={() => {
+                setAlertInputCurrency(currency);
                 const fromUSD = (v) => (v == null ? "" : String(currency === "CDF" ? Math.round(v * exchangeRate) : v));
                 setAlertLowInput(fromUSD(alertSettings?.lowThreshold));
                 setAlertHighInput(fromUSD(alertSettings?.highThreshold));
@@ -1533,7 +1549,14 @@ function App() {
           <small>Évolution</small>
         </button>
 
-        <button className="nav-add" onClick={() => setShowAdd(true)} aria-label="Ajouter une transaction">
+        <button
+          className="nav-add"
+          onClick={() => {
+            setForm((f) => ({ ...f, amountCurrency: currency }));
+            setShowAdd(true);
+          }}
+          aria-label="Ajouter une transaction"
+        >
           <Plus size={22} />
         </button>
 
@@ -1577,7 +1600,25 @@ function App() {
                 </button>
               </div>
 
-              <label htmlFor="amount">Montant (USD)</label>
+              <div className="amount-row">
+                <label htmlFor="amount">Montant</label>
+                <div className="mini-segmented">
+                  <button
+                    type="button"
+                    className={form.amountCurrency === "USD" ? "active" : ""}
+                    onClick={() => setForm({ ...form, amountCurrency: "USD" })}
+                  >
+                    USD
+                  </button>
+                  <button
+                    type="button"
+                    className={form.amountCurrency === "CDF" ? "active" : ""}
+                    onClick={() => setForm({ ...form, amountCurrency: "CDF" })}
+                  >
+                    CDF
+                  </button>
+                </div>
+              </div>
               <input
                 id="amount"
                 type="number"
@@ -1599,6 +1640,17 @@ function App() {
                   <option key={c} value={c}>{CATEGORY_ICONS[c]} {c}</option>
                 ))}
               </select>
+
+              {form.category === "Autre" && (
+                <input
+                  id="custom-category"
+                  type="text"
+                  placeholder="Précise la catégorie (ex : Cadeau, École...)"
+                  value={form.customCategory}
+                  onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+                  style={{ marginTop: "-2px" }}
+                />
+              )}
 
               <label htmlFor="description">Description</label>
               <input
@@ -1724,7 +1776,39 @@ function App() {
                   Mkelo t'envoie une notification quand ton solde descend sous ton seuil bas, ou dépasse ton seuil haut.
                 </p>
                 <form onSubmit={enregistrerSeuils}>
-                  <label htmlFor="alert-low">Seuil bas ({currency})</label>
+                  <div className="amount-row">
+                    <label htmlFor="alert-low">Seuil bas</label>
+                    <div className="mini-segmented">
+                      <button
+                        type="button"
+                        className={alertInputCurrency === "USD" ? "active" : ""}
+                        onClick={() => {
+                          if (alertInputCurrency === "CDF") {
+                            const conv = (v) => (v === "" || isNaN(Number(v)) ? "" : String(Math.round((Number(v) / exchangeRate) * 100) / 100));
+                            setAlertLowInput(conv(alertLowInput));
+                            setAlertHighInput(conv(alertHighInput));
+                          }
+                          setAlertInputCurrency("USD");
+                        }}
+                      >
+                        USD
+                      </button>
+                      <button
+                        type="button"
+                        className={alertInputCurrency === "CDF" ? "active" : ""}
+                        onClick={() => {
+                          if (alertInputCurrency === "USD") {
+                            const conv = (v) => (v === "" || isNaN(Number(v)) ? "" : String(Math.round(Number(v) * exchangeRate)));
+                            setAlertLowInput(conv(alertLowInput));
+                            setAlertHighInput(conv(alertHighInput));
+                          }
+                          setAlertInputCurrency("CDF");
+                        }}
+                      >
+                        CDF
+                      </button>
+                    </div>
+                  </div>
                   <input
                     id="alert-low"
                     type="number"
@@ -1734,7 +1818,7 @@ function App() {
                     onChange={(e) => setAlertLowInput(e.target.value)}
                   />
 
-                  <label htmlFor="alert-high">Seuil haut ({currency})</label>
+                  <label htmlFor="alert-high">Seuil haut ({alertInputCurrency})</label>
                   <input
                     id="alert-high"
                     type="number"
@@ -2371,6 +2455,15 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 
 .modal form { display: flex; flex-direction: column; gap: 7px; }
 .modal label { margin-top: 7px; color: var(--text); font-size: 13px; font-weight: 700; }
+
+.amount-row { display: flex; align-items: center; justify-content: space-between; margin-top: 7px; }
+.amount-row label { margin-top: 0; }
+.mini-segmented { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--bg); }
+.mini-segmented button {
+  border: none; padding: 5px 10px; border-radius: 7px; background: transparent;
+  color: var(--text-muted); font-size: 11px; font-weight: 700;
+}
+.mini-segmented button.active { background: var(--accent); color: white; }
 .modal input, .modal select {
   width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 13px;
   outline: none; background: var(--bg); color: var(--text);
