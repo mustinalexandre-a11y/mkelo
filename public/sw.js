@@ -1,4 +1,4 @@
-const CACHE_NAME = "mkelo-v1";
+const CACHE_NAME = "mkelo-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
