@@ -34,6 +34,11 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = "https://adqktbvxhdkizrvygljc.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_GZOL0J1W_Ekg65AISdvXCw_lMyNWEJN";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ============================================================
    DONNÉES DE RÉFÉRENCE
@@ -98,242 +103,134 @@ const PAYMENT_METHODS = [
   { key: "banque", label: "Banque", color: "#2946c7", emoji: "🏦" },
 ];
 
-const STORAGE_KEYS = {
-  transactions: "mkelo:transactions",
-  prefs: "mkelo:prefs",
-  profile: "mkelo:profile",
-  notifications: "mkelo:notifications",
-  alerts: "mkelo:alerts",
-  debts: "mkelo:debts",
-  savings: "mkelo:savings",
-};
-
-// Génère une date à J-n jours
-const daysAgo = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  d.setHours(9 + (n % 6), 0, 0, 0);
-  return d;
-};
-
 /* ============================================================
-   FONCTIONS UTILITAIRES
+   SUPABASE — chargement / sauvegarde des données par utilisateur
    ============================================================ */
 
-function formatRelativeDate(date) {
-  const now = new Date();
-  const diffDays = Math.floor((now.setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 86400000);
-  if (diffDays === 0) return "Aujourd'hui";
-  if (diffDays === 1) return "Hier";
-  if (diffDays < 7) return `Il y a ${diffDays} jours`;
-  return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+async function loadProfile(userId) {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (error || !data) return null;
+  return {
+    name: data.name,
+    avatar: data.avatar,
+    theme: data.theme || "clair",
+    currency: data.currency || "USD",
+    exchangeRate: data.exchange_rate || DEFAULT_EXCHANGE_RATE,
+  };
 }
 
-function formatAmount(amountUSD, currency) {
-  if (currency === "CDF") {
-    const value = Math.round(amountUSD * activeExchangeRate);
-    return `${value.toLocaleString("fr-FR")} FC`;
+async function saveProfile(userId, profile) {
+  try {
+    await supabase.from("profiles").update({
+      name: profile.name,
+      avatar: profile.avatar,
+      theme: profile.theme,
+      currency: profile.currency,
+      exchange_rate: profile.exchangeRate,
+    }).eq("id", userId);
+    return true;
+  } catch (e) {
+    return false;
   }
-  return `$${amountUSD.toFixed(2)}`;
 }
 
-function getPaymentMethod(key) {
-  return PAYMENT_METHODS.find((p) => p.key === key) || PAYMENT_METHODS[0];
+async function loadTransactions(userId) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("date", { ascending: false });
+  if (error || !data) return [];
+  return data.map((t) => ({
+    id: t.id,
+    type: t.type,
+    category: t.category,
+    description: t.description || "",
+    amount: Number(t.amount),
+    date: new Date(t.date),
+    paymentMethod: t.payment_method,
+  }));
 }
 
-function buildChartData(transactions, period) {
-  const now = new Date();
+async function loadDebts(userId) {
+  const { data, error } = await supabase
+    .from("debts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("date", { ascending: false });
+  if (error || !data) return [];
+  return data.map((d) => ({
+    id: d.id,
+    type: d.type,
+    person: d.person,
+    description: d.description || "",
+    amount: Number(d.amount),
+    date: new Date(d.date),
+  }));
+}
 
-  if (period === "semaine") {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = daysAgo(i);
-      days.push({ key: d.toDateString(), label: d.toLocaleDateString("fr-FR", { weekday: "short" }), solde: 0 });
-    }
-    transactions.forEach((t) => {
-      const key = new Date(t.date).toDateString();
-      const bucket = days.find((d) => d.key === key);
-      if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
+async function loadNotifications(userId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(50);
+  if (error || !data) return [];
+  return data.map((n) => ({
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    read: n.read,
+    date: new Date(n.date),
+  }));
+}
+
+async function loadAlertSettings(userId) {
+  const { data, error } = await supabase.from("alert_settings").select("*").eq("user_id", userId).maybeSingle();
+  if (error || !data) return null;
+  return {
+    lowThreshold: data.low_threshold === null ? null : Number(data.low_threshold),
+    highThreshold: data.high_threshold === null ? null : Number(data.high_threshold),
+    lowTriggered: data.low_triggered,
+    highTriggered: data.high_triggered,
+  };
+}
+
+async function saveAlertSettings(userId, alertSettings) {
+  try {
+    await supabase.from("alert_settings").upsert({
+      user_id: userId,
+      low_threshold: alertSettings.lowThreshold,
+      high_threshold: alertSettings.highThreshold,
+      low_triggered: alertSettings.lowTriggered,
+      high_triggered: alertSettings.highTriggered,
     });
-    let running = 0;
-    return days.map((d) => {
-      running += d.solde;
-      return { label: d.label, valeur: Math.round(running * 100) / 100 };
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadSavingsGoal(userId) {
+  const { data, error } = await supabase.from("savings_goals").select("*").eq("user_id", userId).maybeSingle();
+  if (error || !data) return null;
+  return {
+    label: data.label,
+    target: data.target === null ? null : Number(data.target),
+    current: Number(data.current || 0),
+  };
+}
+
+async function saveSavingsGoal(userId, savingsGoal) {
+  try {
+    await supabase.from("savings_goals").upsert({
+      user_id: userId,
+      label: savingsGoal.label,
+      target: savingsGoal.target,
+      current: savingsGoal.current,
     });
-  }
-
-  if (period === "mois") {
-    const weeks = [];
-    for (let i = 3; i >= 0; i--) {
-      weeks.push({ label: `S-${i === 0 ? "0" : i}`, from: i * 7 + 6, to: i * 7, solde: 0 });
-    }
-    transactions.forEach((t) => {
-      const diffDays = Math.floor((now - new Date(t.date)) / 86400000);
-      const bucket = weeks.find((w) => diffDays <= w.from && diffDays >= w.to);
-      if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
-    });
-    let running = 0;
-    return weeks.map((w) => {
-      running += w.solde;
-      return { label: w.label === "S-0" ? "Cette sem." : w.label, valeur: Math.round(running * 100) / 100 };
-    });
-  }
-
-  // année
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("fr-FR", { month: "short" }), solde: 0 });
-  }
-  transactions.forEach((t) => {
-    const d = new Date(t.date);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    const bucket = months.find((m) => m.key === key);
-    if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
-  });
-  let running = 0;
-  return months.map((m) => {
-    running += m.solde;
-    return { label: m.label, valeur: Math.round(running * 100) / 100 };
-  });
-}
-
-async function loadTransactions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.transactions);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.map((t) => ({ ...t, date: new Date(t.date) }));
-    }
-  } catch (e) {
-    // clé absente ou erreur de lecture : on retombe sur les données de démarrage
-  }
-  return null;
-}
-
-async function saveTransactions(transactions) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.transactions, JSON.stringify(transactions));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadPrefs() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.prefs);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    // pas de préférences enregistrées encore
-  }
-  return null;
-}
-
-async function savePrefs(prefs) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.prefs, JSON.stringify(prefs));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadProfile() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.profile);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    // pas encore de profil enregistré
-  }
-  return null;
-}
-
-async function saveProfile(profile) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadNotifications() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.notifications);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.map((n) => ({ ...n, date: new Date(n.date) }));
-    }
-  } catch (e) {
-    // pas encore de notifications enregistrées
-  }
-  return null;
-}
-
-async function saveNotifications(notifications) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadAlertSettings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.alerts);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    // pas encore de seuils enregistrés
-  }
-  return null;
-}
-
-async function saveAlertSettings(alertSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.alerts, JSON.stringify(alertSettings));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadDebts() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.debts);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.map((d) => ({ ...d, date: new Date(d.date) }));
-    }
-  } catch (e) {
-    // pas encore de dettes enregistrées
-  }
-  return null;
-}
-
-async function saveDebts(debts) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.debts, JSON.stringify(debts));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function loadSavingsGoal() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.savings);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    // pas encore d'objectif enregistré
-  }
-  return null;
-}
-
-async function saveSavingsGoal(savingsGoal) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.savings, JSON.stringify(savingsGoal));
     return true;
   } catch (e) {
     return false;
@@ -356,15 +253,21 @@ function App() {
   const [filterType, setFilterType] = useState("toutes");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const [profile, setProfile] = useState(null);
-  const [isOnboarded, setIsOnboarded] = useState(false);
-  const [onboardingName, setOnboardingName] = useState("");
-  const [onboardingAvatar, setOnboardingAvatar] = useState(AVATARS[0].key);
-  const [onboardingError, setOnboardingError] = useState("");
+  const [session, setSession] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authView, setAuthView] = useState("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authAvatar, setAuthAvatar] = useState(AVATARS[0].key);
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editProfileName, setEditProfileName] = useState("");
   const [editProfileAvatar, setEditProfileAvatar] = useState(AVATARS[0].key);
@@ -403,53 +306,74 @@ function App() {
     paymentMethod: "especes",
   });
 
-  // Chargement initial depuis le stockage persistant
+  // Vérifie la session existante au démarrage, et écoute les connexions/déconnexions
   useEffect(() => {
     let cancelled = false;
 
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      setSession(data.session);
+      setAuthChecking(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Charge toutes les données de l'utilisateur une fois connecté (et les vide à la déconnexion)
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!session?.user) {
+      setProfile(null);
+      setTransactions([]);
+      setDebts([]);
+      setNotifications([]);
+      setAlertSettings(null);
+      setSavingsGoal(null);
+      setIsLoading(true);
+      return;
+    }
+
+    setIsLoading(true);
+
     (async () => {
+      const userId = session.user.id;
       const [
-        storedTransactions,
-        storedPrefs,
-        storedProfile,
-        storedNotifications,
-        storedAlertSettings,
-        storedDebts,
-        storedSavingsGoal,
+        loadedProfile,
+        loadedTransactions,
+        loadedDebts,
+        loadedNotifications,
+        loadedAlertSettings,
+        loadedSavingsGoal,
       ] = await Promise.all([
-        loadTransactions(),
-        loadPrefs(),
-        loadProfile(),
-        loadNotifications(),
-        loadAlertSettings(),
-        loadDebts(),
-        loadSavingsGoal(),
+        loadProfile(userId),
+        loadTransactions(userId),
+        loadDebts(userId),
+        loadNotifications(userId),
+        loadAlertSettings(userId),
+        loadSavingsGoal(userId),
       ]);
 
       if (cancelled) return;
 
-      if (storedTransactions) {
-        setTransactions(storedTransactions);
-      } else {
-        setTransactions([]);
-        saveTransactions([]);
+      if (loadedProfile) {
+        setProfile({ name: loadedProfile.name, avatar: loadedProfile.avatar });
+        setTheme(loadedProfile.theme);
+        setCurrency(loadedProfile.currency);
+        setExchangeRate(loadedProfile.exchangeRate);
       }
-
-      if (storedPrefs) {
-        if (storedPrefs.theme) setTheme(storedPrefs.theme);
-        if (storedPrefs.currency) setCurrency(storedPrefs.currency);
-        if (storedPrefs.exchangeRate) setExchangeRate(storedPrefs.exchangeRate);
-      }
-
-      if (storedProfile && storedProfile.name) {
-        setProfile(storedProfile);
-        setIsOnboarded(true);
-      }
-
-      if (storedNotifications) setNotifications(storedNotifications);
-      if (storedAlertSettings) setAlertSettings(storedAlertSettings);
-      if (storedDebts) setDebts(storedDebts);
-      if (storedSavingsGoal) setSavingsGoal(storedSavingsGoal);
+      setTransactions(loadedTransactions);
+      setDebts(loadedDebts);
+      setNotifications(loadedNotifications);
+      if (loadedAlertSettings) setAlertSettings(loadedAlertSettings);
+      if (loadedSavingsGoal) setSavingsGoal(loadedSavingsGoal);
 
       setIsLoading(false);
     })();
@@ -457,55 +381,39 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session?.user?.id]);
 
-  // Sauvegarde automatique des transactions à chaque changement (après le chargement initial)
+  // Sauvegarde automatique du profil (nom, avatar, devise, thème, taux) dans Supabase
   useEffect(() => {
-    if (isLoading) return;
-    saveTransactions(transactions);
-  }, [transactions, isLoading]);
-
-  // Sauvegarde automatique des préférences (devise, thème, taux de change)
-  useEffect(() => {
-    if (isLoading) return;
-    savePrefs({ theme, currency, exchangeRate });
-  }, [theme, currency, exchangeRate, isLoading]);
-
-  // Sauvegarde automatique du profil
-  useEffect(() => {
-    if (isLoading || !profile) return;
-    saveProfile(profile);
-  }, [profile, isLoading]);
-
-  // Sauvegarde automatique des notifications
-  useEffect(() => {
-    if (isLoading) return;
-    saveNotifications(notifications);
-  }, [notifications, isLoading]);
+    if (isLoading || !session?.user || !profile) return;
+    saveProfile(session.user.id, { name: profile.name, avatar: profile.avatar, theme, currency, exchangeRate });
+  }, [profile, theme, currency, exchangeRate, isLoading, session?.user?.id]);
 
   // Sauvegarde automatique des seuils d'alerte
   useEffect(() => {
-    if (isLoading || !alertSettings) return;
-    saveAlertSettings(alertSettings);
-  }, [alertSettings, isLoading]);
-
-  // Sauvegarde automatique des dettes
-  useEffect(() => {
-    if (isLoading) return;
-    saveDebts(debts);
-  }, [debts, isLoading]);
+    if (isLoading || !alertSettings || !session?.user) return;
+    saveAlertSettings(session.user.id, alertSettings);
+  }, [alertSettings, isLoading, session?.user?.id]);
 
   // Sauvegarde automatique de l'objectif d'épargne
   useEffect(() => {
-    if (isLoading || !savingsGoal) return;
-    saveSavingsGoal(savingsGoal);
-  }, [savingsGoal, isLoading]);
+    if (isLoading || !savingsGoal || !session?.user) return;
+    saveSavingsGoal(session.user.id, savingsGoal);
+  }, [savingsGoal, isLoading, session?.user?.id]);
+
 
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Écoute les mises à jour détectées par le service worker (voir index.html)
+  useEffect(() => {
+    const handler = () => setUpdateAvailable(true);
+    window.addEventListener("mkelo-update-available", handler);
+    return () => window.removeEventListener("mkelo-update-available", handler);
+  }, []);
 
   const totalRevenus = useMemo(
     () => transactions.filter((t) => t.type === "revenu").reduce((s, t) => s + t.amount, 0),
@@ -526,11 +434,21 @@ function App() {
     [debts]
   );
 
-  const ajouterNotification = ({ type, title, message }) => {
-    setNotifications((prev) => [
-      { id: Date.now() + Math.random(), type, title, message, date: new Date(), read: false },
-      ...prev,
-    ].slice(0, 50));
+  const ajouterNotification = async ({ type, title, message }) => {
+    if (!session?.user) return;
+    const { data } = await supabase
+      .from("notifications")
+      .insert({ user_id: session.user.id, type, title, message })
+      .select()
+      .single();
+    if (data) {
+      setNotifications((prev) =>
+        [
+          { id: data.id, type: data.type, title: data.title, message: data.message, read: data.read, date: new Date(data.date) },
+          ...prev,
+        ].slice(0, 50)
+      );
+    }
   };
 
   // Initialise des seuils par défaut la première fois (30% et 150% du solde de départ)
@@ -696,25 +614,45 @@ function App() {
     return Object.keys(next).length === 0;
   };
 
-  const ajouterTransaction = (e) => {
+  const ajouterTransaction = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
+    if (!session?.user) return;
 
     const amountUSD = form.amountCurrency === "CDF" ? Number(form.amount) / exchangeRate : Number(form.amount);
     const categorieFinale =
       form.category === "Autre" && form.customCategory.trim() ? form.customCategory.trim() : form.category;
 
-    const nouvelleTransaction = {
-      id: Date.now(),
-      type: form.type,
-      category: categorieFinale,
-      description: form.description.trim(),
-      amount: amountUSD,
-      date: new Date(),
-      paymentMethod: form.paymentMethod,
-    };
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: session.user.id,
+        type: form.type,
+        category: categorieFinale,
+        description: form.description.trim(),
+        amount: amountUSD,
+        payment_method: form.paymentMethod,
+      })
+      .select()
+      .single();
 
-    setTransactions((prev) => [nouvelleTransaction, ...prev]);
+    if (error || !data) {
+      setToast("❌ Erreur de connexion, réessaie");
+      return;
+    }
+
+    setTransactions((prev) => [
+      {
+        id: data.id,
+        type: data.type,
+        category: data.category,
+        description: data.description || "",
+        amount: Number(data.amount),
+        date: new Date(data.date),
+        paymentMethod: data.payment_method,
+      },
+      ...prev,
+    ]);
     setForm({
       type: "depense",
       category: "Nourriture",
@@ -729,30 +667,73 @@ function App() {
     setToast(form.type === "revenu" ? "Revenu ajouté ✅" : "Dépense ajoutée ✅");
   };
 
-  const supprimerTransaction = (id) => {
+  const supprimerTransaction = async (id) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     setConfirmDeleteId(null);
     setToast("Transaction supprimée 🗑️");
+    await supabase.from("transactions").delete().eq("id", id);
   };
 
-  const reinitialiserDonnees = () => {
+  const reinitialiserDonnees = async () => {
     setTransactions([]);
     setShowResetConfirm(false);
     setToast("Données réinitialisées 🔄");
+    if (session?.user) await supabase.from("transactions").delete().eq("user_id", session.user.id);
   };
 
-  const terminerInscription = (e) => {
+  const gererInscription = async (e) => {
     e.preventDefault();
-    const name = onboardingName.trim();
-    if (!name) {
-      setOnboardingError("Entre ton prénom pour continuer.");
+    setAuthError("");
+    const name = authName.trim();
+    if (!name) return setAuthError("Entre ton prénom.");
+    if (!authEmail.trim()) return setAuthError("Entre ton email.");
+    if (authPassword.length < 6) return setAuthError("Le mot de passe doit faire au moins 6 caractères.");
+
+    setAuthSubmitting(true);
+    const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword });
+
+    if (error) {
+      setAuthSubmitting(false);
+      setAuthError(
+        error.message.includes("already registered") || error.message.includes("already exists")
+          ? "Ce compte existe déjà — connecte-toi plutôt."
+          : "Erreur : " + error.message
+      );
       return;
     }
-    const nouveauProfil = { name, avatar: onboardingAvatar };
-    setProfile(nouveauProfil);
-    saveProfile(nouveauProfil);
-    setIsOnboarded(true);
-    setOnboardingError("");
+
+    if (data.user) {
+      await supabase.from("profiles").insert({
+        id: data.user.id,
+        name,
+        avatar: authAvatar,
+        theme: "clair",
+        currency: "USD",
+        exchange_rate: DEFAULT_EXCHANGE_RATE,
+      });
+    }
+
+    setAuthSubmitting(false);
+
+    if (!data.session) {
+      setAuthView("login");
+      setAuthError("Compte créé ✅ Vérifie ta boîte mail si une confirmation est demandée, puis connecte-toi.");
+    }
+  };
+
+  const gererConnexion = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!authEmail.trim() || !authPassword) {
+      setAuthError("Entre ton email et ton mot de passe.");
+      return;
+    }
+
+    setAuthSubmitting(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+    setAuthSubmitting(false);
+
+    if (error) setAuthError("Email ou mot de passe incorrect.");
   };
 
   const enregistrerProfil = (e) => {
@@ -764,29 +745,37 @@ function App() {
     setToast("Profil mis à jour ✅");
   };
 
-  const changerDeProfil = () => {
-    setProfile(null);
-    setIsOnboarded(false);
-    setOnboardingName("");
+  const seDeconnecter = async () => {
+    await supabase.auth.signOut();
     setShowChangeProfileConfirm(false);
     setShowAdvancedSettings(false);
+    setAuthEmail("");
+    setAuthPassword("");
+    setAuthName("");
+    setAuthView("login");
   };
 
-  const marquerLu = (id) => {
+  const marquerLu = async (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
   };
 
-  const marquerToutLu = () => {
+  const marquerToutLu = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    if (session?.user) {
+      await supabase.from("notifications").update({ read: true }).eq("user_id", session.user.id).eq("read", false);
+    }
   };
 
-  const supprimerNotification = (id) => {
+  const supprimerNotification = async (id) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    await supabase.from("notifications").delete().eq("id", id);
   };
 
-  const effacerToutesNotifications = () => {
+  const effacerToutesNotifications = async () => {
     setNotifications([]);
     setToast("Notifications effacées 🗑️");
+    if (session?.user) await supabase.from("notifications").delete().eq("user_id", session.user.id);
   };
 
   const enregistrerSeuils = (e) => {
@@ -811,7 +800,7 @@ function App() {
     setToast("Taux de change mis à jour ✅");
   };
 
-  const ajouterDette = (e) => {
+  const ajouterDette = async (e) => {
     e.preventDefault();
     const errs = {};
     if (!debtForm.person.trim()) errs.person = "Indique le nom de la personne.";
@@ -819,26 +808,47 @@ function App() {
     if (!debtForm.amount || isNaN(amt) || amt <= 0) errs.amount = "Entre un montant valide.";
     setDebtErrors(errs);
     if (Object.keys(errs).length > 0) return;
+    if (!session?.user) return;
 
-    const nouvelleDette = {
-      id: Date.now(),
-      type: debtForm.type,
-      person: debtForm.person.trim(),
-      description: debtForm.description.trim(),
-      amount: amt,
-      date: new Date(),
-    };
-    setDebts((prev) => [nouvelleDette, ...prev]);
+    const { data, error } = await supabase
+      .from("debts")
+      .insert({
+        user_id: session.user.id,
+        type: debtForm.type,
+        person: debtForm.person.trim(),
+        description: debtForm.description.trim(),
+        amount: amt,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      setToast("❌ Erreur de connexion, réessaie");
+      return;
+    }
+
+    setDebts((prev) => [
+      {
+        id: data.id,
+        type: data.type,
+        person: data.person,
+        description: data.description || "",
+        amount: Number(data.amount),
+        date: new Date(data.date),
+      },
+      ...prev,
+    ]);
     setDebtForm({ type: "on-me-doit", person: "", amount: "", description: "" });
     setDebtErrors({});
     setShowAddDebt(false);
     setToast("Dette ajoutée ✅");
   };
 
-  const supprimerDette = (id) => {
+  const supprimerDette = async (id) => {
     setDebts((prev) => prev.filter((d) => d.id !== id));
     setConfirmDeleteDebtId(null);
     setToast("Dette marquée comme remboursée 🎉");
+    await supabase.from("debts").delete().eq("id", id);
   };
 
   const enregistrerObjectifEpargne = (e) => {
@@ -909,6 +919,108 @@ function App() {
 
   setActiveExchangeRate(exchangeRate);
 
+  if (authChecking) {
+    return (
+      <div className="app" data-theme={theme}>
+        <style>{STYLES}</style>
+        <div className="loading-screen">
+          <div className="spinner" />
+          <p>Vérification de ta session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="app" data-theme={theme}>
+        <style>{STYLES}</style>
+        <div className="onboarding-screen">
+          <div className="onboarding-card">
+            <img src={LOGO_DATA_URI} alt="Mkelo" className="onboarding-logo" />
+            <h1>{authView === "login" ? "Content de te revoir" : "Bienvenue sur Mkelo"}</h1>
+            <p>
+              {authView === "login"
+                ? "Connecte-toi pour retrouver tes données."
+                : "Crée ton compte pour suivre ton argent au quotidien."}
+            </p>
+
+            <form onSubmit={authView === "login" ? gererConnexion : gererInscription}>
+              {authView === "signup" && (
+                <>
+                  <label htmlFor="auth-name">Comment veux-tu qu'on t'appelle ?</label>
+                  <input
+                    id="auth-name"
+                    type="text"
+                    placeholder="Ton prénom"
+                    value={authName}
+                    onChange={(e) => setAuthName(e.target.value)}
+                    autoFocus
+                  />
+                </>
+              )}
+
+              <label htmlFor="auth-email">Email</label>
+              <input
+                id="auth-email"
+                type="email"
+                placeholder="toi@exemple.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+              />
+
+              <label htmlFor="auth-password">Mot de passe</label>
+              <input
+                id="auth-password"
+                type="password"
+                placeholder={authView === "signup" ? "Au moins 6 caractères" : "••••••••"}
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+
+              {authView === "signup" && (
+                <>
+                  <label>Choisis ton personnage</label>
+                  <div className="avatar-picker">
+                    {AVATARS.map((a) => (
+                      <button
+                        type="button"
+                        key={a.key}
+                        className={`avatar-option ${authAvatar === a.key ? "selected" : ""}`}
+                        style={{ background: `${a.color}22`, borderColor: authAvatar === a.key ? a.color : "transparent" }}
+                        onClick={() => setAuthAvatar(a.key)}
+                        aria-label={a.key}
+                      >
+                        {a.emoji}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {authError && <span className="error-text">{authError}</span>}
+
+              <button className="submit-button" type="submit" disabled={authSubmitting}>
+                {authSubmitting ? "Un instant…" : authView === "login" ? "Se connecter" : "Créer mon compte"}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              className="auth-switch"
+              onClick={() => {
+                setAuthView((v) => (v === "login" ? "signup" : "login"));
+                setAuthError("");
+              }}
+            >
+              {authView === "login" ? "Pas encore de compte ? Inscris-toi" : "Déjà un compte ? Connecte-toi"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="app" data-theme={theme}>
@@ -921,61 +1033,16 @@ function App() {
     );
   }
 
-  if (!isOnboarded) {
-    return (
-      <div className="app" data-theme={theme}>
-        <style>{STYLES}</style>
-        <div className="onboarding-screen">
-          <div className="onboarding-card">
-            <img src={LOGO_DATA_URI} alt="Mkelo" className="onboarding-logo" />
-            <h1>Bienvenue sur Mkelo</h1>
-            <p>Ton assistant simple pour suivre ton argent au quotidien.</p>
-
-            <form onSubmit={terminerInscription}>
-              <label htmlFor="onboarding-name">Comment veux-tu qu'on t'appelle ?</label>
-              <input
-                id="onboarding-name"
-                type="text"
-                placeholder="Ton prénom"
-                value={onboardingName}
-                onChange={(e) => {
-                  setOnboardingName(e.target.value);
-                  setOnboardingError("");
-                }}
-                className={onboardingError ? "input-error" : ""}
-                autoFocus
-              />
-              {onboardingError && <span className="error-text">{onboardingError}</span>}
-
-              <label>Choisis ton personnage</label>
-              <div className="avatar-picker">
-                {AVATARS.map((a) => (
-                  <button
-                    type="button"
-                    key={a.key}
-                    className={`avatar-option ${onboardingAvatar === a.key ? "selected" : ""}`}
-                    style={{ background: `${a.color}22`, borderColor: onboardingAvatar === a.key ? a.color : "transparent" }}
-                    onClick={() => setOnboardingAvatar(a.key)}
-                    aria-label={a.key}
-                  >
-                    {a.emoji}
-                  </button>
-                ))}
-              </div>
-
-              <button className="submit-button" type="submit">
-                Commencer
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app" data-theme={theme}>
       <style>{STYLES}</style>
+
+      {updateAvailable && (
+        <div className="update-banner">
+          <span>Une nouvelle version de Mkelo est disponible</span>
+          <button onClick={() => window.location.reload()}>Actualiser</button>
+        </div>
+      )}
 
       {/* ================= HEADER ================= */}
       <header className="header">
@@ -1750,6 +1817,28 @@ function App() {
             </div>
 
             <div className="settings-list">
+              <div className="account-block">
+                <div className="account-block-header">
+                  <User size={16} />
+                  <span>Compte</span>
+                </div>
+                <p className="account-email">{session?.user?.email}</p>
+
+                {showChangeProfileConfirm ? (
+                  <div className="reset-confirm">
+                    <p>Tu vas être déconnecté. Tes données restent en sécurité sur ton compte, prêtes pour la prochaine connexion.</p>
+                    <div className="reset-confirm-buttons">
+                      <button className="confirm-yes" onClick={seDeconnecter}>Oui, me déconnecter</button>
+                      <button className="confirm-no" onClick={() => setShowChangeProfileConfirm(false)}>Annuler</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="profile-button" onClick={() => setShowChangeProfileConfirm(true)}>
+                    Se déconnecter
+                  </button>
+                )}
+              </div>
+
               <div className="alert-thresholds">
                 <p className="settings-hint">
                   Taux utilisé pour convertir tes montants entre USD et CDF partout dans l'app.
@@ -1833,20 +1922,6 @@ function App() {
                   </button>
                 </form>
               </div>
-
-              {showChangeProfileConfirm ? (
-                <div className="reset-confirm">
-                  <p>Changer de profil te ramène à l'écran d'accueil. Tes transactions restent enregistrées sur cet appareil.</p>
-                  <div className="reset-confirm-buttons">
-                    <button className="confirm-yes" onClick={changerDeProfil}>Oui, changer</button>
-                    <button className="confirm-no" onClick={() => setShowChangeProfileConfirm(false)}>Annuler</button>
-                  </div>
-                </div>
-              ) : (
-                <button className="profile-button" onClick={() => setShowChangeProfileConfirm(true)}>
-                  Changer de profil
-                </button>
-              )}
 
               {showResetConfirm ? (
                 <div className="reset-confirm">
@@ -2318,6 +2393,11 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 }
 .onboarding-card input:focus { border-color: var(--accent); }
 .onboarding-card .submit-button { margin-top: 10px; }
+.auth-switch {
+  display: block; width: 100%; margin-top: 16px; border: none; background: none;
+  color: var(--accent); font-size: 12.5px; font-weight: 700; text-align: center;
+}
+.submit-button:disabled { opacity: 0.6; }
 
 .notif-wrap { position: relative; }
 .notification { position: relative; }
@@ -2384,6 +2464,20 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 .alert-thresholds .submit-button { margin-top: 4px; padding: 12px; }
 
 .settings-list { display: flex; flex-direction: column; gap: 16px; }
+
+.update-banner {
+  position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 10px 16px; background: var(--accent); color: white; font-size: 12.5px; font-weight: 600;
+  flex-wrap: wrap; text-align: center;
+}
+.update-banner button {
+  border: none; padding: 6px 14px; border-radius: 20px; background: white; color: var(--accent);
+  font-size: 11.5px; font-weight: 800;
+}
+
+.account-block { display: flex; flex-direction: column; gap: 4px; }
+.account-block-header { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); }
+.account-email { margin: 0 0 8px; font-size: 12.5px; color: var(--text-muted); word-break: break-all; }
 
 .section-icon { margin-right: 6px; vertical-align: -3px; color: var(--accent); }
 
