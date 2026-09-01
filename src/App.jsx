@@ -103,6 +103,96 @@ const PAYMENT_METHODS = [
   { key: "banque", label: "Banque", color: "#2946c7", emoji: "🏦" },
 ];
 
+// Génère une date à J-n jours
+const daysAgo = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(9 + (n % 6), 0, 0, 0);
+  return d;
+};
+
+/* ============================================================
+   FONCTIONS UTILITAIRES
+   ============================================================ */
+
+function formatRelativeDate(date) {
+  const now = new Date();
+  const diffDays = Math.floor((now.setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 86400000);
+  if (diffDays === 0) return "Aujourd'hui";
+  if (diffDays === 1) return "Hier";
+  if (diffDays < 7) return `Il y a ${diffDays} jours`;
+  return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function formatAmount(amountUSD, currency) {
+  if (currency === "CDF") {
+    const value = Math.round(amountUSD * activeExchangeRate);
+    return `${value.toLocaleString("fr-FR")} FC`;
+  }
+  return `$${amountUSD.toFixed(2)}`;
+}
+
+function getPaymentMethod(key) {
+  return PAYMENT_METHODS.find((p) => p.key === key) || PAYMENT_METHODS[0];
+}
+
+function buildChartData(transactions, period) {
+  const now = new Date();
+
+  if (period === "semaine") {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = daysAgo(i);
+      days.push({ key: d.toDateString(), label: d.toLocaleDateString("fr-FR", { weekday: "short" }), solde: 0 });
+    }
+    transactions.forEach((t) => {
+      const key = new Date(t.date).toDateString();
+      const bucket = days.find((d) => d.key === key);
+      if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
+    });
+    let running = 0;
+    return days.map((d) => {
+      running += d.solde;
+      return { label: d.label, valeur: Math.round(running * 100) / 100 };
+    });
+  }
+
+  if (period === "mois") {
+    const weeks = [];
+    for (let i = 3; i >= 0; i--) {
+      weeks.push({ label: `S-${i === 0 ? "0" : i}`, from: i * 7 + 6, to: i * 7, solde: 0 });
+    }
+    transactions.forEach((t) => {
+      const diffDays = Math.floor((now - new Date(t.date)) / 86400000);
+      const bucket = weeks.find((w) => diffDays <= w.from && diffDays >= w.to);
+      if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
+    });
+    let running = 0;
+    return weeks.map((w) => {
+      running += w.solde;
+      return { label: w.label === "S-0" ? "Cette sem." : w.label, valeur: Math.round(running * 100) / 100 };
+    });
+  }
+
+  // année
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("fr-FR", { month: "short" }), solde: 0 });
+  }
+  transactions.forEach((t) => {
+    const d = new Date(t.date);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const bucket = months.find((m) => m.key === key);
+    if (bucket) bucket.solde += t.type === "revenu" ? t.amount : -t.amount;
+  });
+  let running = 0;
+  return months.map((m) => {
+    running += m.solde;
+    return { label: m.label, valeur: Math.round(running * 100) / 100 };
+  });
+}
+
 /* ============================================================
    SUPABASE — chargement / sauvegarde des données par utilisateur
    ============================================================ */
