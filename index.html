@@ -21,7 +21,19 @@
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register("/sw.js");
+          navigator.serviceWorker.register("/sw.js").then((reg) => {
+            reg.addEventListener("updatefound", () => {
+              const newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener("statechange", () => {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  window.dispatchEvent(new CustomEvent("mkelo-update-available"));
+                }
+              });
+            });
+            // Vérifie activement si une nouvelle version existe, toutes les 2 minutes
+            setInterval(() => reg.update(), 2 * 60 * 1000);
+          });
         });
       }
     </script>
