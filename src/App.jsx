@@ -21,6 +21,7 @@ import {
   Lightbulb,
   Sparkles,
   ChevronLeft,
+  Receipt,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -328,6 +329,31 @@ async function saveSavingsGoal(userId, savingsGoal) {
   }
 }
 
+async function loadBudgets(userId) {
+  const { data, error } = await supabase.from("budgets").select("*").eq("user_id", userId);
+  if (error || !data) return {};
+  const map = {};
+  data.forEach((b) => {
+    map[b.category] = Number(b.amount);
+  });
+  return map;
+}
+
+async function saveBudgets(userId, budgetsMap) {
+  try {
+    await supabase.from("budgets").delete().eq("user_id", userId);
+    const rows = Object.entries(budgetsMap)
+      .filter(([, amount]) => amount > 0)
+      .map(([category, amount]) => ({ user_id: userId, category, amount }));
+    if (rows.length > 0) {
+      await supabase.from("budgets").insert(rows);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* ============================================================
    APP
    ============================================================ */
@@ -384,6 +410,10 @@ function App() {
   const [savingsTargetInput, setSavingsTargetInput] = useState("");
   const [showAddContribution, setShowAddContribution] = useState(false);
   const [contributionInput, setContributionInput] = useState("");
+
+  const [budgets, setBudgets] = useState({});
+  const [showEditBudgets, setShowEditBudgets] = useState(false);
+  const [budgetInputs, setBudgetInputs] = useState({});
 
   const [transactions, setTransactions] = useState([]);
 
@@ -443,6 +473,7 @@ function App() {
         loadedNotifications,
         loadedAlertSettings,
         loadedSavingsGoal,
+        loadedBudgets,
       ] = await Promise.all([
         loadProfile(userId),
         loadTransactions(userId),
@@ -450,6 +481,7 @@ function App() {
         loadNotifications(userId),
         loadAlertSettings(userId),
         loadSavingsGoal(userId),
+        loadBudgets(userId),
       ]);
 
       if (cancelled) return;
@@ -470,6 +502,7 @@ function App() {
       setNotifications(loadedNotifications);
       if (loadedAlertSettings) setAlertSettings(loadedAlertSettings);
       if (loadedSavingsGoal) setSavingsGoal(loadedSavingsGoal);
+      setBudgets(loadedBudgets);
 
       setIsLoading(false);
     })();
@@ -496,6 +529,12 @@ function App() {
     if (isLoading || !savingsGoal || !session?.user) return;
     saveSavingsGoal(session.user.id, savingsGoal);
   }, [savingsGoal, isLoading, session?.user?.id]);
+
+  // Sauvegarde automatique des budgets par catégorie
+  useEffect(() => {
+    if (isLoading || !session?.user) return;
+    saveBudgets(session.user.id, budgets);
+  }, [budgets, isLoading, session?.user?.id]);
 
 
   useEffect(() => {
@@ -632,6 +671,32 @@ function App() {
     return entries.map((e) => ({ ...e, pct: (e.value / max) * 100 }));
   }, [transactions]);
 
+  const budgetProgress = useMemo(() => {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const spentByCategory = {};
+    transactions
+      .filter((t) => t.type === "depense" && new Date(t.date) >= startOfMonth)
+      .forEach((t) => {
+        spentByCategory[t.category] = (spentByCategory[t.category] || 0) + t.amount;
+      });
+
+    return Object.entries(budgets)
+      .map(([category, amount]) => {
+        const spent = spentByCategory[category] || 0;
+        return {
+          category,
+          budget: amount,
+          spent,
+          pct: amount > 0 ? Math.min(100, (spent / amount) * 100) : 0,
+          over: spent > amount,
+        };
+      })
+      .sort((a, b) => b.pct - a.pct);
+  }, [transactions, budgets]);
+
   const insights = useMemo(() => {
     const list = [];
     const now = new Date();
@@ -680,8 +745,16 @@ function App() {
       list.push({ icon: "debt", text: `Tu dois encore ${formatAmount(totalJeDois, currency)} à rembourser.` });
     }
 
+    const budgetDepasse = budgetProgress.find((b) => b.over);
+    const budgetProche = budgetProgress.find((b) => !b.over && b.pct >= 85);
+    if (budgetDepasse) {
+      list.push({ icon: "budget", text: `Budget dépassé pour ${CATEGORY_ICONS[budgetDepasse.category] || ""} ${budgetDepasse.category} ce mois-ci.` });
+    } else if (budgetProche) {
+      list.push({ icon: "budget", text: `Tu approches de ta limite pour ${CATEGORY_ICONS[budgetProche.category] || ""} ${budgetProche.category} (${Math.round(budgetProche.pct)}%).` });
+    }
+
     return list;
-  }, [transactions, categoryBreakdown, paymentBreakdown, totalDepenses, savingsGoal, totalOnMeDoit, totalJeDois, currency]);
+  }, [transactions, categoryBreakdown, paymentBreakdown, totalDepenses, savingsGoal, totalOnMeDoit, totalJeDois, currency, budgetProgress]);
 
   const filteredTransactions = useMemo(() => {
     return transactions
@@ -894,6 +967,21 @@ function App() {
     if (!exchangeRateInput || isNaN(rate) || rate <= 0) return;
     setExchangeRate(rate);
     setToast("Taux de change mis à jour ✅");
+  };
+
+  const enregistrerBudgets = (e) => {
+    e.preventDefault();
+    const toUSD = (v) => (currency === "CDF" ? v / exchangeRate : v);
+    const nouveauxBudgets = {};
+    Object.entries(budgetInputs).forEach(([category, value]) => {
+      const num = Number(value);
+      if (value !== "" && !isNaN(num) && num > 0) {
+        nouveauxBudgets[category] = toUSD(num);
+      }
+    });
+    setBudgets(nouveauxBudgets);
+    setShowEditBudgets(false);
+    setToast("Budgets mis à jour ✅");
   };
 
   const ajouterDette = async (e) => {
@@ -1342,6 +1430,7 @@ function App() {
                       {ins.icon === "payment" && <Wallet size={15} />}
                       {ins.icon === "savings" && <PiggyBank size={15} />}
                       {ins.icon === "debt" && <HandCoins size={15} />}
+                      {ins.icon === "budget" && <Receipt size={15} />}
                     </span>
                     <span>{ins.text}</span>
                   </div>
@@ -1433,6 +1522,48 @@ function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <div className="section-header">
+              <h2><Receipt size={17} className="section-icon" /> Budget par catégorie</h2>
+              <button
+                onClick={() => {
+                  const fromUSD = (v) => (currency === "CDF" ? String(Math.round(v * exchangeRate)) : String(v));
+                  const inputs = {};
+                  CATEGORIES.forEach((c) => {
+                    inputs[c] = budgets[c] != null ? fromUSD(budgets[c]) : "";
+                  });
+                  setBudgetInputs(inputs);
+                  setShowEditBudgets(true);
+                }}
+              >
+                Gérer
+              </button>
+            </div>
+
+            {budgetProgress.length === 0 ? (
+              <EmptyState label="Aucun budget défini pour l'instant" />
+            ) : (
+              <div className="payment-breakdown">
+                {budgetProgress.map((b) => (
+                  <div className="budget-row" key={b.category}>
+                    <div className="budget-row-header">
+                      <span>{CATEGORY_ICONS[b.category] || "🔖"} {b.category}</span>
+                      <span className={b.over ? "expense-text" : ""}>
+                        {formatAmount(b.spent, currency)} / {formatAmount(b.budget, currency)}
+                      </span>
+                    </div>
+                    <div className="progress-bar-wrap">
+                      <div
+                        className="progress-bar-fill"
+                        style={{ width: `${b.pct}%`, background: b.over ? "var(--expense)" : "var(--accent)" }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -2042,6 +2173,46 @@ function App() {
         </div>
       )}
 
+      {/* ================= MODALE GÉRER LES BUDGETS ================= */}
+      {showEditBudgets && (
+        <div className="modal-overlay" onClick={() => setShowEditBudgets(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Gérer mes budgets</h2>
+              <button onClick={() => setShowEditBudgets(false)} aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="settings-hint">
+              Fixe un budget mensuel par catégorie (en {currency}). Laisse vide pour ne pas suivre une catégorie.
+            </p>
+
+            <form onSubmit={enregistrerBudgets}>
+              <div className="budget-form-list">
+                {CATEGORIES.map((c) => (
+                  <div className="budget-form-row" key={c}>
+                    <label htmlFor={`budget-${c}`}>{CATEGORY_ICONS[c]} {c}</label>
+                    <input
+                      id={`budget-${c}`}
+                      type="number"
+                      step="0.01"
+                      placeholder="—"
+                      value={budgetInputs[c] || ""}
+                      onChange={(e) => setBudgetInputs({ ...budgetInputs, [c]: e.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button className="submit-button" type="submit">
+                Enregistrer les budgets
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ================= MODALE AJOUTER DETTE ================= */}
       {showAddDebt && (
         <div className="modal-overlay" onClick={() => setShowAddDebt(false)}>
@@ -2362,6 +2533,20 @@ main { width: min(100%, 760px); margin: auto; padding: 10px 22px; }
 .payment-breakdown-bar-wrap { height: 8px; border-radius: 6px; background: var(--bg); overflow: hidden; }
 .payment-breakdown-bar { height: 100%; border-radius: 6px; }
 .payment-breakdown-row strong { font-size: 12px; white-space: nowrap; }
+
+.budget-row { display: flex; flex-direction: column; gap: 6px; }
+.budget-row-header { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+.budget-row-header span:first-child { color: var(--text); font-weight: 600; }
+.budget-row-header span:last-child { color: var(--text-muted); font-size: 11.5px; }
+
+.budget-form-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; margin: 8px 0; }
+.budget-form-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.budget-form-row label { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
+.budget-form-row input {
+  width: 110px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 10px;
+  outline: none; background: var(--bg); color: var(--text); text-align: right;
+}
+.budget-form-row input:focus { border-color: var(--accent); }
 .amount { font-size: 13px; white-space: nowrap; }
 .income-text { color: var(--income); }
 .expense-text { color: var(--expense); }
