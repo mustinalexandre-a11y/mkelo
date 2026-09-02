@@ -211,13 +211,14 @@ async function loadProfile(userId) {
 
 async function saveProfile(userId, profile) {
   try {
-    await supabase.from("profiles").update({
+    await supabase.from("profiles").upsert({
+      id: userId,
       name: profile.name,
       avatar: profile.avatar,
       theme: profile.theme,
       currency: profile.currency,
       exchange_rate: profile.exchangeRate,
-    }).eq("id", userId);
+    });
     return true;
   } catch (e) {
     return false;
@@ -458,6 +459,11 @@ function App() {
         setTheme(loadedProfile.theme);
         setCurrency(loadedProfile.currency);
         setExchangeRate(loadedProfile.exchangeRate);
+      } else {
+        // Le profil n'a pas été créé correctement à l'inscription (ex : confirmation email requise) —
+        // on le recrée automatiquement avec un nom de secours, réparable ensuite via "Modifier mon profil"
+        const fallbackName = session.user.email ? session.user.email.split("@")[0] : "Utilisateur";
+        setProfile({ name: fallbackName, avatar: AVATARS[0].key });
       }
       setTransactions(loadedTransactions);
       setDebts(loadedDebts);
@@ -793,7 +799,7 @@ function App() {
     }
 
     if (data.user) {
-      await supabase.from("profiles").insert({
+      await supabase.from("profiles").upsert({
         id: data.user.id,
         name,
         avatar: authAvatar,
